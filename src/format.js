@@ -82,17 +82,19 @@ export function buildFieldExplorerEmbed({ query, topics = [], relatedPosts = [],
 
   embed.setDescription(
     topics.length
-      ? `Top field-map positions from ${label}. This is a lightweight positioning aid, not a formal classification.`
-      : `No strong field-map topic match found in ${label}. Try a more specific topic, abstract, method, or construct name.`,
+      ? `Closest field positions from ${label}. This is a lightweight navigation aid, not a formal classification.`
+      : `No strong FieldExplorer match found in ${label}. Try a journal, conference, field category, method, or project keyword.`,
   );
 
   if (topics.length) {
     embed.addFields({
-      name: 'Field positions',
+      name: 'FieldExplorer positions',
       value: topics.map((topic, index) => [
-        `**${index + 1}. T${topic.id} ${truncate(topic.name, 70)}**`,
-        `score ${topic.score}, n=${topic.count}`,
-        topic.keywords?.length ? `keywords: ${topic.keywords.slice(0, 6).join(', ')}` : '',
+        `**${index + 1}. ${truncate(topic.name, 70)}**`,
+        `score ${topic.score}, linked nodes ${topic.count}`,
+        topic.journals?.length ? `journals: ${topic.journals.slice(0, 4).join(', ')}` : '',
+        topic.conferences?.length ? `conferences: ${topic.conferences.slice(0, 4).join(', ')}` : '',
+        !topic.journals?.length && !topic.conferences?.length && topic.keywords?.length ? `keywords: ${topic.keywords.slice(0, 6).join(', ')}` : '',
       ].filter(Boolean).join('\n')).join('\n\n').slice(0, 1000),
     });
   }
@@ -107,8 +109,8 @@ export function buildFieldExplorerEmbed({ query, topics = [], relatedPosts = [],
   embed.addFields({
     name: 'How to use this',
     value: [
-      'Use this to locate a topic, abstract, CFP, or project idea within a research-field map.',
-      'For stronger results, paste 2-5 sentences with constructs, method, population, and technology context.',
+      'Use this to locate a topic, abstract, CFP, or project idea within the FieldExplorer journal/conference map.',
+      'For stronger results, include field labels, venues, methods, technologies, or target communities.',
     ].join('\n'),
   });
 

@@ -8,7 +8,21 @@ const STOPWORDS = new Set([
 export async function loadFieldExplorerTopics(filePath) {
   if (!filePath) return [];
   const text = await fs.readFile(filePath, 'utf8');
-  return parseFieldExplorerTopics(text);
+  return parseFieldExplorerFile(text);
+}
+
+export function parseFieldExplorerFile(text) {
+  const embeddedCsv = extractEmbeddedCsvData(text);
+  const source = embeddedCsv || text;
+  const records = parseCsv(source.replace(/^\uFEFF/, ''));
+  const header = records[0] ?? [];
+  if (header.includes('Name') && header.includes('Type') && header.includes('Category')) {
+    return parseFieldExplorerNetworkCsv(source);
+  }
+  if (header.includes('Topic') && header.includes('Representation')) {
+    return parseFieldExplorerTopics(source);
+  }
+  return [];
 }
 
 export function parseFieldExplorerTopics(csvText) {
@@ -34,6 +48,52 @@ export function parseFieldExplorerTopics(csvText) {
       };
     })
     .filter((topic) => Number.isInteger(topic.id) && topic.id >= 0 && topic.name);
+}
+
+export function parseFieldExplorerNetworkCsv(csvText) {
+  const records = parseCsv(csvText.replace(/^\uFEFF/, ''));
+  if (!records.length) return [];
+  const [header, ...rows] = records;
+  const columns = new Map(header.map((name, index) => [name, index]));
+  const categoryMap = new Map();
+
+  for (const row of rows) {
+    const name = row[columns.get('Name')]?.trim();
+    const type = row[columns.get('Type')]?.trim();
+    const category = row[columns.get('Category')]?.trim();
+    if (!name || !type || !category) continue;
+
+    const item = categoryMap.get(category) ?? {
+      id: category,
+      count: 0,
+      name: category,
+      rawName: category,
+      sourceType: 'field-explorer-network',
+      keywords: [],
+      journals: [],
+      conferences: [],
+      organizations: [],
+      representativePreview: '',
+    };
+
+    item.count += 1;
+    if (type === 'Journal') item.journals.push(name);
+    else if (type === 'Conference' || type === 'SubConference') item.conferences.push(name);
+    else if (type === 'Organization') item.organizations.push(name);
+    item.keywords.push(name, type);
+    categoryMap.set(category, item);
+  }
+
+  return [...categoryMap.values()]
+    .map((item) => ({
+      ...item,
+      keywords: [...new Set(item.keywords)].slice(0, 20),
+      journals: [...new Set(item.journals)].sort(),
+      conferences: [...new Set(item.conferences)].sort(),
+      organizations: [...new Set(item.organizations)].sort(),
+      representativePreview: fieldExplorerPreview(item),
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 export function rankFieldTopics(query, topics, { limit = 5 } = {}) {
@@ -65,6 +125,9 @@ function scoreTopic(query, queryTokens, topic) {
     topic.name,
     topic.rawName,
     ...(topic.keywords ?? []),
+    ...(topic.journals ?? []),
+    ...(topic.conferences ?? []),
+    ...(topic.organizations ?? []),
     topic.representativePreview,
   ].join(' '));
   const haystack = new Set(haystackTokens);
@@ -83,6 +146,19 @@ function scoreTopic(query, queryTokens, topic) {
   }
 
   return score;
+}
+
+function fieldExplorerPreview(item) {
+  const parts = [];
+  if (item.journals?.length) parts.push(`Journals: ${item.journals.slice(0, 4).join(', ')}`);
+  if (item.conferences?.length) parts.push(`Conferences: ${item.conferences.slice(0, 4).join(', ')}`);
+  if (item.organizations?.length) parts.push(`Organizations: ${item.organizations.slice(0, 4).join(', ')}`);
+  return parts.join(' | ');
+}
+
+function extractEmbeddedCsvData(text) {
+  const match = String(text ?? '').match(/const\s+csvData\s*=\s*`([\s\S]*?)`;/);
+  return match?.[1] ?? '';
 }
 
 function cleanTopicName(name) {

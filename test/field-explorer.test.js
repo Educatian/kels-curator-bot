@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { parseFieldExplorerTopics, rankFieldTopics, tokenize } from '../src/field-explorer.js';
+import {
+  parseFieldExplorerFile,
+  parseFieldExplorerNetworkCsv,
+  parseFieldExplorerTopics,
+  rankFieldTopics,
+  tokenize,
+} from '../src/field-explorer.js';
 
 const TOPICS_CSV = `Topic,Count,Name,Representation,Representative_Docs
 0,25,0_learning_analytics_feedback,"['learning analytics', 'feedback', 'dashboard', 'students']","['Learning analytics dashboards support formative feedback.']"
 1,18,1_ai_ethics_policy,"['ai ethics', 'policy', 'responsible ai', 'education']","['Responsible AI policy in education contexts.']"
 -1,3,-1_outlier_misc,"['misc']","['Outlier']"`;
+
+const NETWORK_CSV = `Name,Type,Category
+Journal of the Learning Sciences,Journal,Learning sciences focused
+International Journal of Computer-Supported Collaborative Learning,Journal,Learning sciences focused
+LAK Conference,Conference,Learning Analytics
+Journal of Learning Analytics,Journal,Learning Analytics
+AIED Conference,Conference,AIED
+International Journal of Artificial Intelligence in Education,Journal,AIED`;
 
 describe('field explorer helpers', () => {
   it('parses field explorer topic CSV and excludes outliers', () => {
@@ -30,5 +44,27 @@ describe('field explorer helpers', () => {
       'analytics',
       'dashboards',
     ]);
+  });
+
+  it('parses FieldExplorer network CSV into field categories', () => {
+    const fields = parseFieldExplorerNetworkCsv(NETWORK_CSV);
+    const learningSciences = fields.find((field) => field.name === 'Learning sciences focused');
+    expect(fields).toHaveLength(3);
+    expect(learningSciences).toMatchObject({
+      id: 'Learning sciences focused',
+      name: 'Learning sciences focused',
+      count: 2,
+      journals: [
+        'International Journal of Computer-Supported Collaborative Learning',
+        'Journal of the Learning Sciences',
+      ],
+    });
+  });
+
+  it('extracts embedded FieldExplorer csvData from a source file', () => {
+    const fields = parseFieldExplorerFile(`const csvData = \`${NETWORK_CSV}\`;`);
+    const ranked = rankFieldTopics('AIED journal and conference', fields);
+    expect(ranked[0].name).toBe('AIED');
+    expect(ranked[0].conferences).toEqual(['AIED Conference']);
   });
 });
