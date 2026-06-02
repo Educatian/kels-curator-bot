@@ -19,15 +19,17 @@ import {
   buildArticleRecommendationEmbed,
   buildEventReminderEmbed,
   buildFieldExplorerEmbed,
+  buildFieldPulseEmbed,
   buildMonthlyRadarEmbed,
   buildTechSignalEmbed,
+  buildVenueScoutEmbed,
   buildSearchEmbed,
   formatTopicList,
   formatHealth,
   formatStats,
   formatWatchList,
 } from './format.js';
-import { loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
+import { buildVenueScout, loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
 import { createChatLogger } from './logger.js';
@@ -232,6 +234,64 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'venue-scout') {
+    await interaction.deferReply({ ephemeral: true });
+    const query = interaction.options.getString('text', true);
+    const days = interaction.options.getInteger('days') ?? 180;
+    const result = await handleVenueScout(query, days);
+    await chatLogger.log({
+      eventType: 'venue-scout',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'venue-scout',
+      query,
+      responseExcerpt: result.scout.tiers.map((tier) => `${tier.tier}: ${tier.topicName}`).join('; '),
+      metadata: { days, tiers: result.scout.tiers.length, relatedPosts: result.relatedPosts.length },
+    });
+    await interaction.editReply({
+      embeds: [buildVenueScoutEmbed({
+        query,
+        scout: result.scout,
+        relatedPosts: result.relatedPosts,
+        label: config.fieldExplorerLabel,
+        appUrl: config.fieldExplorerAppUrl,
+        enabled: result.enabled,
+      })],
+    });
+    return;
+  }
+
+  if (interaction.commandName === 'field-pulse') {
+    await interaction.deferReply({ ephemeral: true });
+    const days = interaction.options.getInteger('days') ?? 14;
+    const result = await handleFieldPulse(days);
+    await chatLogger.log({
+      eventType: 'field-pulse',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'field-pulse',
+      query: `last ${days} days`,
+      responseExcerpt: result.fieldMatches.map((topic) => topic.name).join('; '),
+      metadata: { days, posts: result.posts.length, fieldMatches: result.fieldMatches.length },
+    });
+    await interaction.editReply({
+      embeds: [buildFieldPulseEmbed({
+        posts: result.posts,
+        fieldMatches: result.fieldMatches,
+        days,
+        label: config.fieldExplorerLabel,
+        appUrl: config.fieldExplorerAppUrl,
+      })],
+    });
+    return;
+  }
+
   if (interaction.commandName === 'submit-cfp') {
     const title = interaction.options.getString('title', true);
     const deadline = interaction.options.getString('deadline', true);
@@ -288,6 +348,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await targetChannel.send({ embeds: [buildDigestEmbed(posts, { category, days })] });
     await interaction.reply({
       content: `Posted a ${category} digest with ${posts.length} indexed item(s) to #${displayChannelName(targetChannel)}.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === 'post-field-pulse') {
+    const days = interaction.options.getInteger('days') ?? 14;
+    const targetChannel = interaction.options.getChannel('channel') ?? interaction.channel;
+    if (!targetChannel?.isTextBased?.()) {
+      await interaction.reply({ content: 'Please choose a text channel.', ephemeral: true });
+      return;
+    }
+    const result = await handleFieldPulse(days);
+    await targetChannel.send({
+      embeds: [buildFieldPulseEmbed({
+        posts: result.posts,
+        fieldMatches: result.fieldMatches,
+        days,
+        label: config.fieldExplorerLabel,
+        appUrl: config.fieldExplorerAppUrl,
+      })],
+    });
+    await interaction.reply({
+      content: `Posted a Field Pulse with ${result.posts.length} indexed item(s) to #${displayChannelName(targetChannel)}.`,
       ephemeral: true,
     });
     return;
@@ -354,6 +438,35 @@ async function handleFieldMap(query, days) {
     enabled: config.fieldExplorerEnabled && Boolean(config.fieldExplorerTopicsFile),
     topics: rankedTopics,
     relatedPosts,
+  };
+}
+
+async function handleVenueScout(query, days) {
+  const topics = await getFieldExplorerTopics();
+  const scout = buildVenueScout(query, topics, { limit: 3 });
+  const posts = await store.getPosts({ category: 'all', days });
+  const relatedPosts = rankPostsForQuery(query, posts, { limit: 5 })
+    .filter((post) => post.relevance > 0);
+  return {
+    enabled: config.fieldExplorerEnabled && Boolean(config.fieldExplorerTopicsFile),
+    scout,
+    relatedPosts,
+  };
+}
+
+async function handleFieldPulse(days) {
+  const posts = await store.getPosts({ category: 'all', days });
+  const topics = await getFieldExplorerTopics();
+  const fieldText = posts.map((post) => [
+    post.channelName,
+    post.category,
+    ...(post.tags ?? []),
+    post.content,
+  ].join(' ')).join('\n');
+  const fieldMatches = rankFieldTopics(fieldText, topics, { limit: 5 });
+  return {
+    posts,
+    fieldMatches,
   };
 }
 

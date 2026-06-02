@@ -13,11 +13,14 @@ describe('slash commands', () => {
       'cfp-helper',
       'topic-digest',
       'field-map',
+      'venue-scout',
+      'field-pulse',
       'submit-cfp',
       'backfill',
       'stats',
       'health',
       'post-digest',
+      'post-field-pulse',
       'deadlines',
       'help-kels',
     ]);
@@ -29,10 +32,12 @@ describe('slash commands', () => {
     const stats = payload.find((command) => command.name === 'stats');
     const health = payload.find((command) => command.name === 'health');
     const postDigest = payload.find((command) => command.name === 'post-digest');
+    const postFieldPulse = payload.find((command) => command.name === 'post-field-pulse');
 
     expect(backfill.default_member_permissions).toBe('32');
     expect(stats.default_member_permissions).toBe('32');
     expect(health.default_member_permissions).toBe('32');
     expect(postDigest.default_member_permissions).toBe('32');
+    expect(postFieldPulse.default_member_permissions).toBe('32');
   });
 });

@@ -147,6 +147,34 @@ export function buildCommands() {
           .setMaxValue(365),
       ),
     new SlashCommandBuilder()
+      .setName('venue-scout')
+      .setDescription('Scout possible journal/conference lanes for a project idea or abstract.')
+      .addStringOption((option) =>
+        option
+          .setName('text')
+          .setDescription('Project idea, abstract, CFP fit note, or paper summary')
+          .setRequired(true),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many days of KELS archive posts to connect')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
+      ),
+    new SlashCommandBuilder()
+      .setName('field-pulse')
+      .setDescription('Show recent KELS activity positioned against the Field Explorer map.')
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days to include')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(60),
+      ),
+    new SlashCommandBuilder()
       .setName('submit-cfp')
       .setDescription('Create a clean CFP/RFP entry for the archive.')
       .addStringOption((option) =>
@@ -205,6 +233,24 @@ export function buildCommands() {
           .setRequired(false)
           .setMinValue(1)
           .setMaxValue(90),
+      )
+      .addChannelOption((option) =>
+        option
+          .setName('channel')
+          .setDescription('Where to post; defaults to the current channel')
+          .setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('post-field-pulse')
+      .setDescription('Post a Field Pulse summary to the current or selected channel.')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days to include')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(60),
       )
       .addChannelOption((option) =>
         option

@@ -173,6 +173,26 @@ export function rankFieldTopics(query, topics, { limit = 5 } = {}) {
     .slice(0, limit);
 }
 
+export function buildVenueScout(query, topics, { limit = 3 } = {}) {
+  const ranked = rankFieldTopics(query, topics, { limit: Math.max(limit, 5) });
+  const tiers = ranked.slice(0, limit).map((topic, index) => ({
+    tier: ['Strong fit', 'Adjacent fit', 'Exploratory fit'][index] ?? `Option ${index + 1}`,
+    topicName: topic.name,
+    score: topic.score,
+    count: topic.count,
+    journals: (topic.journals ?? []).slice(0, 4),
+    conferences: (topic.conferences ?? []).slice(0, 4),
+    guidance: venueScoutGuidance(topic.name),
+  }));
+
+  return {
+    query,
+    ranked,
+    tiers,
+    weakFit: !ranked.length || (ranked[0]?.score ?? 0) < 4,
+  };
+}
+
 export function tokenize(value) {
   return String(value ?? '')
     .toLowerCase()
@@ -181,6 +201,29 @@ export function tokenize(value) {
     .map((token) => token.trim())
     .filter((token) => token.length >= 2 && !STOPWORDS.has(token))
     .slice(0, 180);
+}
+
+function venueScoutGuidance(topicName) {
+  const normalized = normalize(topicName);
+  if (normalized.includes('learning analytics')) {
+    return 'Frame the work around data traces, feedback loops, dashboards, modeling, or evidence for learner support.';
+  }
+  if (normalized.includes('aied') || normalized.includes('artificial intelligence')) {
+    return 'Emphasize AI behavior, learner interaction with AI, evaluation design, and responsible deployment in learning contexts.';
+  }
+  if (normalized.includes('learning sciences')) {
+    return 'Lead with theory of learning, mechanism, interaction, design conjecture, or evidence about how learning unfolds.';
+  }
+  if (normalized.includes('instructional design')) {
+    return 'Make the design problem, intervention logic, implementation context, and evaluation evidence explicit.';
+  }
+  if (normalized.includes('teacher')) {
+    return 'Clarify teacher learning, professional practice, classroom enactment, or teacher-facing support design.';
+  }
+  if (normalized.includes('hci') || normalized.includes('human-computer')) {
+    return 'Highlight interaction design, usability, socio-technical context, and how people actually use the system.';
+  }
+  return 'Clarify the core contribution, evidence type, target community, and why this venue category is the right audience.';
 }
 
 function scoreTopic(query, queryTokens, topic) {

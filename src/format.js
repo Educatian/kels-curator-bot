@@ -131,6 +131,133 @@ export function buildFieldExplorerEmbed({
   return embed;
 }
 
+export function buildVenueScoutEmbed({
+  query,
+  scout,
+  relatedPosts = [],
+  label = 'Field Explorer',
+  appUrl = '',
+  enabled = true,
+}) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Venue Scout: ${truncate(query, 70)}`)
+    .setColor(0x2563eb)
+    .setTimestamp(new Date());
+
+  if (!enabled) {
+    return embed.setDescription('Field Explorer is not enabled yet. Ask an organizer to configure `FIELD_EXPLORER_TOPICS_FILE`.');
+  }
+
+  embed.setDescription(
+    scout?.weakFit
+      ? `No strong venue fit found in ${label}. Treat the options below as exploratory and add more abstract/method/venue detail.`
+      : `Draft venue positioning from ${label}. This is a scouting aid, not a submission guarantee.`,
+  );
+
+  if (appUrl) {
+    embed.addFields({
+      name: 'FieldExplorer app',
+      value: `[Open the latest FieldExplorer map](${appUrl})`,
+    });
+  }
+
+  if (scout?.tiers?.length) {
+    embed.addFields({
+      name: 'Candidate venue lanes',
+      value: scout.tiers.map((tier) => [
+        `**${tier.tier}: ${truncate(tier.topicName, 64)}**`,
+        `fit score ${tier.score}, linked nodes ${tier.count}`,
+        tier.journals.length ? `journals: ${tier.journals.join(', ')}` : '',
+        tier.conferences.length ? `conferences: ${tier.conferences.join(', ')}` : '',
+        `angle: ${tier.guidance}`,
+      ].filter(Boolean).join('\n')).join('\n\n').slice(0, 1600),
+    });
+  } else {
+    embed.addFields({
+      name: 'Candidate venue lanes',
+      value: 'No candidate lanes found. Try adding venue names, methods, population, theory, or target field labels.',
+    });
+  }
+
+  if (relatedPosts.length) {
+    embed.addFields({
+      name: 'Related KELS originals',
+      value: relatedPosts.slice(0, 5).map(lineFor).join('\n').slice(0, 1000),
+    });
+  }
+
+  embed.addFields({
+    name: 'Submission framing checklist',
+    value: [
+      '1. Name the target audience before choosing a venue.',
+      '2. Match contribution type: theory, design, empirical evidence, tool, or community resource.',
+      '3. Check recent accepted papers and CFP language before committing.',
+    ].join('\n'),
+  });
+
+  return embed;
+}
+
+export function buildFieldPulseEmbed({
+  posts = [],
+  fieldMatches = [],
+  days = 14,
+  label = 'Field Explorer',
+  appUrl = '',
+}) {
+  const flow = buildKnowledgeFlow(posts);
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Field Pulse: last ${days} days`)
+    .setDescription(
+      posts.length
+        ? `Recent KELS activity positioned against ${label}. Use this as a lightweight prompt for community discussion.`
+        : `No indexed KELS activity found in the last ${days} days.`,
+    )
+    .setColor(0x0f766e)
+    .setTimestamp(new Date());
+
+  if (appUrl) {
+    embed.addFields({
+      name: 'FieldExplorer app',
+      value: `[Open the latest FieldExplorer map](${appUrl})`,
+    });
+  }
+
+  embed.addFields(
+    {
+      name: 'Community signals',
+      value: flow.topics.length
+        ? flow.topics.slice(0, 6).map((topic) => `- #${topic.topic} (${topic.count}) ${topic.channels.slice(0, 2).map((channel) => `#${channel}`).join(', ')}`).join('\n').slice(0, 1000)
+        : 'No topic signals detected yet.',
+    },
+    {
+      name: 'FieldExplorer positions',
+      value: fieldMatches.length
+        ? fieldMatches.slice(0, 5).map((topic, index) => `**${index + 1}. ${topic.name}** | score ${topic.score}, linked nodes ${topic.count}`).join('\n')
+        : 'No strong FieldExplorer category match yet.',
+    },
+    {
+      name: 'Bridge opportunities',
+      value: flow.bridgeOpportunities.length
+        ? flow.bridgeOpportunities.map((item) => `- ${item.prompt}`).join('\n').slice(0, 1000)
+        : 'No cross-channel bridge opportunity detected yet.',
+    },
+    {
+      name: 'Discussion seed',
+      value: flow.participationPrompts[0] || 'Which recent KELS post could become a shared reading, proposal idea, or methods discussion?',
+    },
+  );
+
+  if (flow.evidencePosts.length) {
+    embed.addFields({
+      name: 'Evidence trail',
+      value: flow.evidencePosts.slice(0, 5).map((item) => `- #${item.topic} ${lineFor(item.post)}`).join('\n').slice(0, 1000),
+    });
+  }
+
+  return embed;
+}
+
 export function buildDeadlinesEmbed(deadlines, { days = 60, category = 'all' } = {}) {
   const embed = new EmbedBuilder()
     .setTitle(`KELS Deadlines: ${CATEGORY_LABELS[category] ?? category}`)
@@ -425,6 +552,9 @@ export function buildHelpEmbed() {
           '`/search query:"learning analytics" category:all`',
           '`/watch action:add keyword:"assistant professor"`',
           '`/watch action:list`',
+          '`/field-map query:"multimodal learning analytics"`',
+          '`/venue-scout text:"paper abstract or project idea"`',
+          '`/field-pulse days:14`',
           '`/submit-cfp title:... deadline:... url:...`',
         ].join('\n'),
       },
@@ -433,6 +563,7 @@ export function buildHelpEmbed() {
         value: [
           '`/backfill channel:#job_academic limit:100`',
           '`/post-digest category:all days:7 channel:#newsletter`',
+          '`/post-field-pulse days:14 channel:#academic-resources`',
           '`/stats`',
         ].join('\n'),
       },

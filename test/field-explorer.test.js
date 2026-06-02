@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildVenueScout,
   parseFieldExplorerFile,
   parseFieldExplorerNetworkCsv,
   parseFieldExplorerTopics,
@@ -109,5 +110,16 @@ describe('field explorer helpers', () => {
     const fields = parseFieldExplorerFile(VENUES_JSON);
     const ranked = rankFieldTopics('AIED conference artificial intelligence education', fields);
     expect(ranked[0].name).toBe('AIED');
+  });
+
+  it('builds tiered venue-scout lanes from FieldExplorer categories', () => {
+    const fields = parseFieldExplorerFile(VENUES_JSON);
+    const scout = buildVenueScout('AIED learning analytics dashboard for teacher feedback', fields);
+    expect(scout.weakFit).toBe(false);
+    expect(scout.tiers[0]).toMatchObject({
+      tier: 'Strong fit',
+      topicName: 'AIED',
+    });
+    expect(scout.tiers[0].conferences).toContain('AIED Conference (CFP: February)');
   });
 });
