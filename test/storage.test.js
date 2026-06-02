@@ -138,4 +138,45 @@ describe('JsonStore', () => {
 
     expect(events.map((event) => event.post.id)).toEqual(['soon']);
   });
+
+  it('returns D-1 events and recently ended events for automation', async () => {
+    await store.savePost(post({
+      id: 'tomorrow',
+      channelName: 'announcement',
+      category: 'event',
+      content: 'D-1 event June 3, 2026 10:00 AM PT',
+      eventDateTimes: [{
+        label: 'June 3, 2026 10:00 AM PT',
+        iso: '2026-06-03',
+        startsAt: '2026-06-03T17:00:00.000Z',
+        timeZone: 'America/Los_Angeles',
+      }],
+    }));
+    await store.savePost(post({
+      id: 'ended',
+      channelName: 'announcement',
+      category: 'event',
+      content: 'Ended event June 2, 2026 10:00 AM PT',
+      eventDateTimes: [{
+        label: 'June 2, 2026 10:00 AM PT',
+        iso: '2026-06-02',
+        startsAt: '2026-06-02T17:00:00.000Z',
+        timeZone: 'America/Los_Angeles',
+      }],
+    }));
+
+    const d1 = await store.getEventsOnDay({
+      daysFromNow: 1,
+      sourceChannels: ['announcement'],
+      now: new Date('2026-06-02T12:00:00.000Z'),
+    });
+    const followups = await store.getPastEventsNeedingFollowup({
+      sourceChannels: ['announcement'],
+      now: new Date('2026-06-02T18:00:00.000Z'),
+      windowMinutes: 180,
+    });
+
+    expect(d1.map((event) => event.post.id)).toEqual(['tomorrow']);
+    expect(followups.map((event) => event.post.id)).toEqual(['ended']);
+  });
 });

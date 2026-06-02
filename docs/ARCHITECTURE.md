@@ -24,6 +24,8 @@ flowchart TD
     Qwen["Qwen/Ollama prompts<br/>src/qwen.js"]
     OpenAlex["OpenAlex connector<br/>src/openalex.js"]
     Arxiv["arXiv connector<br/>src/arxiv.js"]
+    GitHub["GitHub repo connector<br/>src/github-repos.js"]
+    Relevance["Archive relevance<br/>src/relevance.js"]
     Logger["Logger<br/>src/logger.js"]
   end
 
@@ -41,6 +43,8 @@ flowchart TD
   Client --> Qwen
   Client --> OpenAlex
   Client --> Arxiv
+  Client --> GitHub
+  Client --> Relevance
   Client --> Format
   Format --> SchedulesOut
   Format --> DMs
@@ -73,6 +77,7 @@ Loads and validates environment variables. It groups configuration into:
 - scheduled post settings.
 - Qwen/Ollama settings.
 - onboarding, spam, role-tagging, and logging settings.
+- GitHub Tech Signal, D-1 event reminders, event follow-up, and role-confidence thresholds.
 
 Invalid numeric settings fail fast at startup.
 
@@ -105,10 +110,11 @@ Turns raw Discord message text into structured metadata:
 - date labels
 - deadline dates
 - timed event starts
+- event links grouped as Zoom, RSVP, Google Form, and other links
 - categories
 - lightweight research tags
 
-Timed event extraction is used for one-hour `@everyone` reminders. It only acts on events that include both a date and a time.
+Timed event extraction is used for D-1 reminders, one-hour `@everyone` reminders, and post-event follow-up threads. It only acts on events that include both a date and a time.
 
 ### `src/storage.js`
 
@@ -122,7 +128,7 @@ Main records:
 - `state.json`: scheduler state, sent reminders, previously recommended article IDs.
 - `chatbot-logs.json`: optional local interaction logs.
 
-The store keeps the last 5,000 indexed posts and preserves scheduler state so the bot does not repeatedly post the same automated item.
+The store keeps the last 5,000 indexed posts and preserves scheduler state so the bot does not repeatedly post the same automated item. It also exposes D-1 event lookup and recently-ended event lookup for announcement automation.
 
 ### `src/format.js`
 
@@ -149,13 +155,14 @@ Qwen is optional. If `QWEN_ENABLED=false` or Ollama is unavailable, the bot fall
 Qwen-enhanced tasks:
 
 - recommended article reading guide
-- arXiv Tech Signal digest
+- arXiv and GitHub Tech Signal digest
 - forum title/tag suggestions
 - profile-match explanations
-- archive Q&A
+- archive Q&A with source evidence, relevance, and weak-evidence handling
 - CFP helper summaries
 - topic digests
 - onboarding questions
+- onboarding profile extraction
 - introduction name extraction
 - role inference
 
@@ -184,6 +191,18 @@ The default query targets:
 - `stat.ML`
 
 Candidate scoring favors relevant signals such as LLMs, RAG, agents, multimodal systems, evaluation, alignment, tutoring, feedback, and human-AI interaction.
+
+### `src/github-repos.js`
+
+Fetches GitHub repository candidates for `KELS Tech Signal`.
+
+Default query lanes include LLM education, RAG education, AI agents, learning analytics, multimodal learning, and AI tutors. Scoring favors repository freshness, stars, forks, topical matches, and KELS archive fit.
+
+### `src/relevance.js`
+
+Ranks archive evidence for `/ask-kels` and public curation.
+
+It infers simple filters from user queries, scores indexed posts by token overlap, appends related originals, and gives Tech Signal candidates a lightweight archive-fit bonus based on recent server interests.
 
 ### `src/moderation.js`
 
@@ -233,17 +252,20 @@ sequenceDiagram
   participant Timer
   participant Bot
   participant Arxiv
+  participant GitHub
   participant Qwen
   participant Discord
   participant Store
 
   Timer->>Bot: configured weekday/hour
-  Bot->>Store: read recommendedArxivTechPaperIds
+  Bot->>Store: read recommendedArxivTechPaperIds and recommendedGithubRepoIds
   Bot->>Arxiv: fetch recent tech candidates
-  Bot->>Bot: score and select one paper
+  Bot->>GitHub: fetch recent high-signal repo candidates
+  Bot->>Store: read recent archive posts for fit score
+  Bot->>Bot: choose one arXiv paper or GitHub repo
   Bot->>Qwen: translate into KELS research implications
   Bot->>Discord: post thread/embed to academic resources
-  Bot->>Store: save arXiv ID and post timestamp
+  Bot->>Store: save selected ID and post timestamp
 ```
 
 ### Announcement Event Reminder
@@ -256,10 +278,10 @@ sequenceDiagram
   participant Discord
 
   Timer->>Bot: every EVENT_REMINDER_POLL_MINUTES
-  Bot->>Store: find announcement events starting within 60 minutes
-  Store-->>Bot: future timed events only
+  Bot->>Store: find announcement events for D-1, one-hour, and follow-up
+  Store-->>Bot: future timed events and recently-ended events
   Bot->>Store: skip already-reminded event keys
-  Bot->>Discord: send @everyone reminder
+  Bot->>Discord: send @everyone reminders or create follow-up thread
   Bot->>Store: record reminder keys
 ```
 
@@ -269,6 +291,7 @@ Important behavior:
 - Events that already started are ignored.
 - Each event reminder is sent once.
 - `allowedMentions` explicitly permits `@everyone` for this workflow.
+- Post-event follow-up threads ask members to share recordings, slides, links, or notes.
 
 ## Slash Command Privacy
 

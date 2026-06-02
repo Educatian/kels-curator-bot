@@ -21,6 +21,8 @@ describe('config', () => {
     expect(config.articleDigestEnabled).toBe(false);
     expect(config.articleDigestHourLocal).toBe(10);
     expect(config.articleDigestLookbackDays).toBe(365);
+    expect(config.techSignalGithubEnabled).toBe(true);
+    expect(config.techSignalGithubMinStars).toBe(100);
     expect(config.monthlyRadarEnabled).toBe(false);
     expect(config.monthlyRadarHourLocal).toBe(9);
     expect(config.deadlineReminderEnabled).toBe(false);
@@ -29,13 +31,19 @@ describe('config', () => {
     expect(config.eventReminderSourceChannels).toEqual(['announcement']);
     expect(config.eventReminderLookaheadMinutes).toBe(60);
     expect(config.eventReminderPollMinutes).toBe(10);
+    expect(config.eventDayBeforeReminderEnabled).toBe(true);
+    expect(config.eventFollowupEnabled).toBe(true);
     expect(config.forumSuggestionEnabled).toBe(false);
     expect(config.qwenEnabled).toBe(false);
     expect(config.qwenTimeoutMs).toBe(60000);
     expect(config.roleAutoTaggingEnabled).toBe(false);
     expect(config.rolePrefix).toBe('KELS:');
+    expect(config.roleAutoAssignConfidence).toBe(0.88);
+    expect(config.roleAutoCreateConfidence).toBe(0.94);
     expect(config.onboardingEnabled).toBe(false);
     expect(config.onboardingChannelId).toBe('');
+    expect(config.rolelessReminderEnabled).toBe(false);
+    expect(config.rolelessReminderAfterDays).toBe(7);
     expect(config.spamAutoDeleteEnabled).toBe(false);
     expect(config.spamMaxUrls).toBe(4);
     expect(config.spamMaxMentions).toBe(8);

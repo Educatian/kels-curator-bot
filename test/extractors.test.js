@@ -3,6 +3,7 @@ import {
   classifyPost,
   extractDates,
   extractDeadlineDates,
+  extractEventLinks,
   extractEventDateTimes,
   extractTags,
   extractUrls,
@@ -36,6 +37,9 @@ describe('extractors', () => {
   it('normalizes dates for deadline views', () => {
     expect(parseDateToIso('November 30, 2026')).toBe('2026-11-30');
     expect(parseDateToIso('2026-06-05')).toBe('2026-06-05');
+    expect(parseDateToIso('June 5', new Date('2026-06-01T00:00:00Z'))).toBe('2026-06-05');
+    expect(parseDateToIso('6/5', new Date('2026-06-01T00:00:00Z'))).toBe('2026-06-05');
+    expect(parseDateToIso('tomorrow', new Date('2026-06-01T00:00:00Z'))).toBe('2026-06-02');
     expect(parseDateToIso('6월 5일', new Date('2026-06-01T00:00:00Z'))).toBe('2026-06-05');
     expect(parseDateToIso('1월 5일', new Date('2026-06-01T00:00:00Z'))).toBe('2027-01-05');
     expect(extractDeadlineDates('마감: 6월 5일', new Date('2026-06-01T00:00:00Z'))).toEqual([
@@ -60,6 +64,30 @@ describe('extractors', () => {
     ]);
   });
 
+  it('extracts timed events when the announcement omits the year', () => {
+    const events = extractEventDateTimes(
+      'Coffee chat tomorrow 10:30 AM PT. RSVP: https://example.org/register',
+      new Date('2026-06-01T00:00:00Z'),
+      'America/Los_Angeles',
+    );
+
+    expect(events[0]).toMatchObject({
+      iso: '2026-06-02',
+      startsAt: '2026-06-02T17:30:00.000Z',
+      timeZone: 'America/Los_Angeles',
+    });
+  });
+
+  it('groups RSVP, Zoom, and Google Form event links', () => {
+    const links = extractEventLinks(
+      'Register https://lu.ma/kels Join https://us02web.zoom.us/j/123 Feedback https://forms.gle/abc',
+    );
+
+    expect(links.rsvpLinks[0]).toContain('lu.ma');
+    expect(links.zoomLinks[0]).toContain('zoom.us');
+    expect(links.formLinks[0]).toContain('forms.gle');
+  });
+
   it('normalizes a message for storage', () => {
     const post = normalizePost({
       messageId: '1',
@@ -74,6 +102,7 @@ describe('extractors', () => {
 
     expect(post.category).toBe('seminar');
     expect(post.urls).toHaveLength(1);
+    expect(post.eventLinks.otherLinks).toHaveLength(1);
     expect(post.deadlineDates).toEqual([]);
     expect(post.createdAt).toBe('2026-06-01T12:00:00.000Z');
   });

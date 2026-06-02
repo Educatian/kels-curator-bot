@@ -7,7 +7,7 @@ import {
   Partials,
   PermissionFlagsBits,
 } from 'discord.js';
-import { fetchCandidateTechPapers, selectWeeklyTechPaper } from './arxiv.js';
+import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from './arxiv.js';
 import { loadConfig } from './config.js';
 import {
   buildCfpContent,
@@ -26,6 +26,7 @@ import {
   formatWatchList,
 } from './format.js';
 import { normalizePost } from './extractors.js';
+import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
 import { createChatLogger } from './logger.js';
 import { detectSpam } from './moderation.js';
 import { fetchCandidateArticles, selectWeeklyArticle } from './openalex.js';
@@ -37,11 +38,20 @@ import {
   createQwenClient,
   explainProfileMatchWithQwen,
   extractIntroFullNameWithQwen,
+  extractOnboardingProfileWithQwen,
   inferMemberRolesWithQwen,
+  summarizeGithubRepoWithQwen,
   suggestForumWithQwen,
   summarizeTechPaperWithQwen,
   summarizeArticleWithQwen,
 } from './qwen.js';
+import {
+  formatRelatedOriginals,
+  inferArchiveFilters,
+  rankPostsForQuery,
+  relatedOriginals,
+  scoreCandidateAgainstArchive,
+} from './relevance.js';
 import { JsonStore } from './storage.js';
 
 const config = loadConfig();
@@ -67,6 +77,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
   scheduleEventReminders();
+  scheduleRolelessReminders();
   if (config.autoBackfillOnReady) {
     await autoBackfillConfiguredChannels(readyClient).catch((error) => {
       console.error('Auto-backfill failed', error);
@@ -483,9 +494,13 @@ async function handleProfile(userId, action, topic) {
 }
 
 async function handleAskKels(interaction, query, category) {
-  const posts = await store.getPosts({ category, days: 365, query });
-  const selectedPosts = posts.slice(0, 8);
-  const answer = await answerArchiveQuestionWithQwen(qwen, query, selectedPosts);
+  const filters = inferArchiveFilters(query, category);
+  const posts = await store.getPosts({ category: filters.category, days: filters.days });
+  const selectedPosts = rankPostsForQuery(query, posts, { limit: 8 });
+  const weakEvidence = !selectedPosts.length || (selectedPosts[0]?.relevance ?? 0) < 2;
+  const answer = await answerArchiveQuestionWithQwen(qwen, query, selectedPosts, { weakEvidence });
+  const originals = relatedOriginals(selectedPosts, { limit: 3, minRelevance: weakEvidence ? 0 : 1 });
+  const answerWithSources = `${answer}${formatRelatedOriginals(originals)}`;
   await chatLogger.log({
     eventType: 'ask-kels',
     guildId: interaction.guildId,
@@ -497,13 +512,15 @@ async function handleAskKels(interaction, query, category) {
     query,
     responseExcerpt: answer,
     metadata: {
-      category,
+      category: filters.category,
+      days: filters.days,
       matchedPosts: posts.length,
-      usedPosts: selectedPosts.map((post) => post.id),
+      usedPosts: selectedPosts.map((post) => ({ id: post.id, relevance: post.relevance })),
+      weakEvidence,
       qwenEnabled: qwen.enabled,
     },
   });
-  return truncateDiscord(answer || 'No answer generated.', 1900);
+  return truncateDiscord(answerWithSources || 'No answer generated.', 1900);
 }
 
 async function notifyWatchers(post, message) {
@@ -529,7 +546,8 @@ async function handleOnboardingIntro(post, message) {
   const handled = new Set(state.onboardingMessageIds ?? []);
   if (handled.has(message.id)) return;
 
-  const extracted = await extractIntroFullNameWithQwen(qwen, post.content);
+  const profile = await extractOnboardingProfileWithQwen(qwen, post.content);
+  const extracted = profile.fullName ? profile : await extractIntroFullNameWithQwen(qwen, post.content);
   const fullName = extracted.fullName || '새 회원';
   const threadName = onboardingThreadName(fullName);
   const thread = await message.startThread({
@@ -546,7 +564,8 @@ async function handleOnboardingIntro(post, message) {
     displayName: fullName,
     introText: post.content,
   });
-  await thread.send(truncateDiscord(reply, 1800)).catch(() => null);
+  const onboardingReply = formatOnboardingReply(reply, profile);
+  await thread.send(truncateDiscord(onboardingReply, 1800)).catch(() => null);
   handled.add(message.id);
   await store.setStateValue('onboardingMessageIds', Array.from(handled).slice(-1000));
   await chatLogger.log({
@@ -557,14 +576,31 @@ async function handleOnboardingIntro(post, message) {
     userId: post.authorId,
     userName: post.authorName,
     query: post.content,
-    responseExcerpt: reply,
+    responseExcerpt: onboardingReply,
     metadata: {
       threadId: thread.id,
       threadName,
       extractedFullName: extracted.fullName,
       confidence: extracted.confidence,
+      profile,
     },
   });
+}
+
+function formatOnboardingReply(reply, profile) {
+  const lines = [reply];
+  if (profile?.interests?.length) lines.push('', `관심분야: ${profile.interests.join(', ')}`);
+  if (profile?.affiliation || profile?.stage) {
+    lines.push(`소속/단계: ${[profile.affiliation, profile.stage].filter(Boolean).join(' / ')}`);
+  }
+  if (profile?.lookingFor?.length) lines.push(`찾는 정보: ${profile.lookingFor.join(', ')}`);
+  if (profile?.recommendedChannels?.length) {
+    lines.push('', `추천 채널: ${profile.recommendedChannels.map((name) => `#${String(name).replace(/^#/, '')}`).join(', ')}`);
+  }
+  if (profile?.recommendedCommands?.length) {
+    lines.push(`추천 slash: ${profile.recommendedCommands.map((command) => `\`${command}\``).join(' ')}`);
+  }
+  return lines.filter(Boolean).join('\n');
 }
 
 function onboardingThreadName(fullName) {
@@ -710,7 +746,9 @@ async function autoTagMemberRoles(post, message) {
     const existing = findRoleByName(roles, suggestion.role);
     if (existing && isForbiddenAutoRole(existing.name)) continue;
     if (existing) {
-      if (config.roleAutoAssignEnabled && existing.position < botHighest) {
+      if (suggestion.confidence < config.roleAutoAssignConfidence) {
+        outcomes.push({ role: existing.name, action: 'suggested-existing-review', reason: suggestion.reason, confidence: suggestion.confidence });
+      } else if (config.roleAutoAssignEnabled && existing.position < botHighest) {
         await member.roles.add(existing, `KELS Qwen auto-tag: ${suggestion.reason}`).catch((error) => {
           outcomes.push({ role: existing.name, action: 'assign-failed', reason: error.message });
         });
@@ -722,7 +760,10 @@ async function autoTagMemberRoles(post, message) {
       continue;
     }
 
-    if (config.roleAutoCreateEnabled && config.roleAutoAssignEnabled && suggestion.create !== false) {
+    if (suggestion.confidence < config.roleAutoCreateConfidence) {
+      outcomes.push({ role: suggestion.role, action: 'suggested-new-review', reason: suggestion.reason, confidence: suggestion.confidence });
+      seenKeys.add(key);
+    } else if (config.roleAutoCreateEnabled && config.roleAutoAssignEnabled && suggestion.create !== false) {
       const roleName = withRolePrefix(suggestion.role);
       if (isForbiddenAutoRole(roleName)) continue;
       const created = await guild.roles.create({
@@ -770,7 +811,7 @@ async function notifyModeratorsAboutRoleOutcomes(guild, member, post, url, outco
     'KELS role auto-tag review',
     `Member: ${member.user.tag} (${member.id})`,
     `Channel: #${post.channelName}`,
-    ...actionable.map((item) => `- ${item.action}: ${item.role} (${item.reason ?? 'no reason'})`),
+    ...actionable.map((item) => `- ${item.action}: ${item.role} [confidence ${item.confidence ?? 'n/a'}] (${item.reason ?? 'no reason'})`),
     `Link: ${url}`,
   ].join('\n');
   for (const user of users) {
@@ -881,13 +922,9 @@ function scheduleWeeklyTechSignal() {
       const state = await store.getState();
       if (state.lastWeeklyTechSignalKey === signalKey) return;
 
-      const candidates = await fetchCandidateTechPapers({
-        query: config.techSignalQuery || undefined,
-        days: config.techSignalLookbackDays,
-      });
-      const paper = selectWeeklyTechPaper(candidates, state.recommendedArxivTechPaperIds ?? []);
-      if (!paper) {
-        console.warn('Weekly KELS Tech Signal skipped because arXiv returned no candidates.');
+      const signal = await selectWeeklyTechSignal(state);
+      if (!signal) {
+        console.warn('Weekly KELS Tech Signal skipped because no arXiv or GitHub candidates were available.');
         return;
       }
 
@@ -897,28 +934,69 @@ function scheduleWeeklyTechSignal() {
         return;
       }
 
-      const qwenDigest = await summarizeTechPaperWithQwen(qwen, paper);
-      await postTechSignal(channel, paper, qwenDigest);
+      const qwenDigest = signal.kind === 'github'
+        ? await summarizeGithubRepoWithQwen(qwen, signal)
+        : await summarizeTechPaperWithQwen(qwen, signal);
+      await postTechSignal(channel, signal, qwenDigest);
       await store.setStateValue('lastWeeklyTechSignalKey', signalKey);
       await store.setStateValue('lastWeeklyTechSignalAt', new Date().toISOString());
-      await store.setStateValue('recommendedArxivTechPaperIds', [
-        paper.id,
-        ...(state.recommendedArxivTechPaperIds ?? []).filter((id) => id !== paper.id),
-      ].slice(0, 100));
+      if (signal.kind === 'github') {
+        await store.setStateValue('recommendedGithubRepoIds', [
+          signal.id,
+          ...(state.recommendedGithubRepoIds ?? []).filter((id) => id !== signal.id),
+        ].slice(0, 100));
+      } else {
+        await store.setStateValue('recommendedArxivTechPaperIds', [
+          signal.id,
+          ...(state.recommendedArxivTechPaperIds ?? []).filter((id) => id !== signal.id),
+        ].slice(0, 100));
+      }
       await chatLogger.log({
         eventType: 'weekly-tech-signal',
         guildId: config.guildId,
         channelId: config.techSignalChannelId,
         commandName: 'scheduled',
-        query: paper.title,
+        query: signal.title,
         responseExcerpt: JSON.stringify(qwenDigest ?? {}),
-        metadata: { arxivId: paper.id, qwenEnabled: qwen.enabled },
+        metadata: { signalId: signal.id, signalKind: signal.kind ?? 'arxiv', qwenEnabled: qwen.enabled },
       });
-      console.log(`Posted weekly KELS Tech Signal: ${paper.id}`);
+      console.log(`Posted weekly KELS Tech Signal: ${signal.kind ?? 'arxiv'} ${signal.id}`);
     } catch (error) {
       console.error('Failed to post scheduled KELS Tech Signal', error);
     }
   }, 30 * 60 * 1000);
+}
+
+async function selectWeeklyTechSignal(state) {
+  const [papers, repos, recentPosts] = await Promise.all([
+    fetchCandidateTechPapers({
+      query: config.techSignalQuery || undefined,
+      days: config.techSignalLookbackDays,
+    }).catch((error) => {
+      console.warn(`arXiv tech signal fetch failed: ${error.message}`);
+      return [];
+    }),
+    config.techSignalGithubEnabled
+      ? fetchCandidateGithubRepos({
+        queries: config.techSignalGithubQueries.length ? config.techSignalGithubQueries : undefined,
+        days: config.techSignalLookbackDays,
+        minStars: config.techSignalGithubMinStars,
+      }).catch((error) => {
+        console.warn(`GitHub tech signal fetch failed: ${error.message}`);
+        return [];
+      })
+      : Promise.resolve([]),
+    store.getPosts({ category: 'all', days: 60 }).catch(() => []),
+  ]);
+
+  const paper = selectWeeklyTechPaper(papers, state.recommendedArxivTechPaperIds ?? []);
+  const repo = selectWeeklyGithubRepo(repos, state.recommendedGithubRepoIds ?? []);
+  const candidates = [
+    paper ? { ...paper, kind: 'arxiv', score: scoreTechPaper(paper) + scoreCandidateAgainstArchive(paper, recentPosts) } : null,
+    repo ? { ...repo, score: scoreGithubRepo(repo) + scoreCandidateAgainstArchive(repo, recentPosts) } : null,
+  ].filter(Boolean);
+
+  return candidates.sort((a, b) => b.score - a.score)[0] ?? null;
 }
 
 function scheduleMonthlyRadar() {
@@ -990,31 +1068,114 @@ function scheduleEventReminders() {
     try {
       const state = await store.getState();
       const posted = new Set(state.postedEventReminderKeys ?? []);
+      const postedD1 = new Set(state.postedEventDayBeforeReminderKeys ?? []);
+      const postedFollowups = new Set(state.postedEventFollowupKeys ?? []);
       const events = (await store.getUpcomingEvents({
         minutes: config.eventReminderLookaheadMinutes,
         sourceChannels: config.eventReminderSourceChannels,
         timeZone: config.digestTimeZone,
       })).filter((event) => !posted.has(eventReminderKey(event)));
 
-      if (!events.length) return;
-
       const guild = await client.guilds.fetch(config.guildId).catch(() => null);
-      const targetChannel = await findEventReminderChannel(guild, events[0]);
-      if (!targetChannel?.isTextBased?.()) return;
+      if (events.length) {
+        const targetChannel = await findEventReminderChannel(guild, events[0]);
+        if (targetChannel?.isTextBased?.()) {
+          await targetChannel.send({
+            content: '@everyone 곧 시작하는 KELS 이벤트 리마인더입니다.',
+            embeds: [buildEventReminderEmbed(events)],
+            allowedMentions: { parse: ['everyone'] },
+          });
+          for (const event of events) posted.add(eventReminderKey(event));
+          console.log(`Posted 1-hour event reminder with ${events.length} item(s).`);
+        }
+      }
 
-      await targetChannel.send({
-        content: '@everyone 곧 시작하는 KELS 이벤트 리마인더입니다.',
-        embeds: [buildEventReminderEmbed(events)],
-        allowedMentions: { parse: ['everyone'] },
-      });
+      if (config.eventDayBeforeReminderEnabled) {
+        const d1Events = (await store.getEventsOnDay({
+          daysFromNow: 1,
+          sourceChannels: config.eventReminderSourceChannels,
+          timeZone: config.digestTimeZone,
+        })).filter((event) => !postedD1.has(eventDayBeforeReminderKey(event)));
 
-      for (const event of events) posted.add(eventReminderKey(event));
+        if (d1Events.length) {
+          const targetChannel = await findEventReminderChannel(guild, d1Events[0]);
+          if (targetChannel?.isTextBased?.()) {
+            await targetChannel.send({
+              content: '@everyone 내일 예정된 KELS 이벤트 리마인더입니다.',
+              embeds: [buildEventReminderEmbed(d1Events, {
+                title: 'KELS Event Reminder: D-1',
+                description: 'Announcement channel event is scheduled for tomorrow.',
+              })],
+              allowedMentions: { parse: ['everyone'] },
+            });
+            for (const event of d1Events) postedD1.add(eventDayBeforeReminderKey(event));
+            console.log(`Posted D-1 event reminder with ${d1Events.length} item(s).`);
+          }
+        }
+      }
+
+      if (config.eventFollowupEnabled) {
+        const followups = (await store.getPastEventsNeedingFollowup({
+          sourceChannels: config.eventReminderSourceChannels,
+          timeZone: config.digestTimeZone,
+          windowMinutes: config.eventFollowupWindowMinutes,
+        })).filter((event) => !postedFollowups.has(eventFollowupKey(event)));
+
+        for (const event of followups.slice(0, 5)) {
+          if (await createEventFollowupThread(event)) postedFollowups.add(eventFollowupKey(event));
+        }
+      }
+
       await store.setStateValue('postedEventReminderKeys', Array.from(posted).slice(-500));
-      console.log(`Posted 1-hour event reminder with ${events.length} item(s).`);
+      await store.setStateValue('postedEventDayBeforeReminderKeys', Array.from(postedD1).slice(-500));
+      await store.setStateValue('postedEventFollowupKeys', Array.from(postedFollowups).slice(-500));
     } catch (error) {
       console.error('Failed to post KELS event reminders', error);
     }
   }, config.eventReminderPollMinutes * 60 * 1000);
+}
+
+function scheduleRolelessReminders() {
+  if (!config.rolelessReminderEnabled) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (now.hour !== config.rolelessReminderHourLocal) return;
+
+      const state = await store.getState();
+      const posted = new Set(state.rolelessReminderKeys ?? []);
+      const reminderKey = `rolelessReminder:${now.date}`;
+      if (posted.has(reminderKey)) return;
+
+      const guild = await client.guilds.fetch(config.guildId).catch(() => null);
+      if (!guild) return;
+      const members = await guild.members.fetch().catch(() => null);
+      if (!members) return;
+
+      const ignored = new Set(config.roleIgnoreNames.map((name) => normalizeRoleKey(name)));
+      const cutoffMs = Date.now() - config.rolelessReminderAfterDays * 24 * 60 * 60 * 1000;
+      let reminded = 0;
+      for (const member of members.values()) {
+        if (member.user.bot) continue;
+        if (!member.joinedAt || member.joinedAt.getTime() > cutoffMs) continue;
+        const visibleRoles = member.roles.cache
+          .filter((role) => role.id !== guild.id)
+          .filter((role) => !ignored.has(normalizeRoleKey(role.name)));
+        if (visibleRoles.size) continue;
+        await member.send([
+          'KELS role 설정을 아직 못 하신 것 같아 가볍게 알려드립니다.',
+          '관심분야나 찾는 정보를 introduction에 남겨주시면 bot이 적절한 role 후보를 운영자에게 추천하고, `/profile action:add topic:<관심주제>`로 개인 맞춤 알림도 받을 수 있습니다.',
+        ].join('\n')).catch(() => null);
+        reminded += 1;
+      }
+
+      posted.add(reminderKey);
+      await store.setStateValue('rolelessReminderKeys', Array.from(posted).slice(-90));
+      if (reminded) console.log(`Sent roleless gentle reminders to ${reminded} member(s).`);
+    } catch (error) {
+      console.error('Failed to send roleless reminders', error);
+    }
+  }, 60 * 60 * 1000);
 }
 
 async function findEventReminderChannel(guild, event) {
@@ -1032,6 +1193,45 @@ async function findEventReminderChannel(guild, event) {
 
 function eventReminderKey(event) {
   return `eventReminder:${event.post.id}:${event.startsAt}`;
+}
+
+function eventDayBeforeReminderKey(event) {
+  return `eventD1:${event.post.id}:${event.startsAt}`;
+}
+
+function eventFollowupKey(event) {
+  return `eventFollowup:${event.post.id}:${event.startsAt}`;
+}
+
+async function createEventFollowupThread(event) {
+  const channel = await client.channels.fetch(event.post.channelId).catch(() => null);
+  if (!channel?.messages?.fetch) return false;
+  const sourceMessage = await channel.messages.fetch(event.post.id).catch(() => null);
+  if (!sourceMessage) return false;
+  if (sourceMessage.hasThread && sourceMessage.thread?.isTextBased?.()) {
+    await sourceMessage.thread.send(eventFollowupPrompt()).catch(() => null);
+    return true;
+  }
+
+  const threadName = `Follow-up: ${event.post.content.replace(/\s+/g, ' ').trim().slice(0, 70) || 'KELS event'}`;
+  const thread = await sourceMessage.startThread({
+    name: threadName.slice(0, 100),
+    autoArchiveDuration: 1440,
+    reason: 'KELS event follow-up materials thread',
+  }).catch((error) => {
+    console.warn(`Failed to create event follow-up thread: ${error.message}`);
+    return null;
+  });
+  if (!thread) return false;
+  await thread.send(eventFollowupPrompt()).catch(() => null);
+  return true;
+}
+
+function eventFollowupPrompt() {
+  return [
+    '이 이벤트의 후속 자료가 있으면 여기 thread에 공유해주세요.',
+    '녹화, 슬라이드, RSVP 후속 링크, 요약 노트 모두 환영합니다.',
+  ].join('\n');
 }
 
 async function postArticleRecommendation(channel, article, qwenSummary = null) {
@@ -1056,7 +1256,7 @@ async function postTechSignal(channel, paper, qwenDigest = null) {
     await channel.threads.create({
       name: techSignalThreadName(paper),
       message: { embeds: [embed] },
-      reason: 'KELS weekly arXiv tech signal',
+      reason: 'KELS weekly tech signal',
     });
     return;
   }

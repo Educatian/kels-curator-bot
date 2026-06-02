@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { buildTechPaperReason } from './arxiv.js';
+import { buildGithubRepoReason } from './github-repos.js';
 import { buildRecommendationReason } from './openalex.js';
 import { mapCategory } from './storage.js';
 
@@ -131,6 +132,7 @@ export function buildArticleRecommendationEmbed(article, qwenSummary = null) {
 }
 
 export function buildTechSignalEmbed(paper, qwenDigest = null) {
+  if (paper.kind === 'github') return buildGithubTechSignalEmbed(paper, qwenDigest);
   const authors = paper.authors?.length ? paper.authors.join(', ') : 'Authors unavailable';
   const digest = qwenDigest ?? {};
 
@@ -182,6 +184,52 @@ export function buildTechSignalEmbed(paper, qwenDigest = null) {
     .setTimestamp(new Date());
 }
 
+function buildGithubTechSignalEmbed(repo, qwenDigest = null) {
+  const digest = qwenDigest ?? {};
+  const meta = [
+    repo.language ? `Language: ${repo.language}` : '',
+    Number.isFinite(repo.stars) ? `Stars: ${repo.stars.toLocaleString('en-US')}` : '',
+    repo.pushedAt ? `Updated: ${repo.pushedAt.slice(0, 10)}` : '',
+  ].filter(Boolean).join(' | ') || 'GitHub repository';
+
+  return new EmbedBuilder()
+    .setTitle('KELS Tech Signal')
+    .setDescription(`**${repo.title}**\n${truncate(repo.description || 'No repository description available.', 420)}`)
+    .setColor(0x0f766e)
+    .addFields(
+      {
+        name: 'GitHub',
+        value: meta,
+      },
+      {
+        name: '왜 지금 볼 만한가',
+        value: digest.whyNow || buildGithubRepoReason(repo),
+      },
+      {
+        name: '교육공학 적용',
+        value: digest.edTechApplication || '프로토타입, 수업 설계 도구, AI 피드백 워크플로우로 옮겨볼 수 있는지 검토할 만합니다.',
+      },
+      {
+        name: 'Learning Sciences 적용',
+        value: digest.learningSciencesApplication || '학습자-도구 상호작용, trace data, 협력학습 지원의 분석 단위로 연결해 볼 수 있습니다.',
+      },
+      {
+        name: '이번 주 이슈테이킹 토픽',
+        value: digest.issueTopic || '오픈소스 AI 도구가 연구 방법을 넓히는가, 아니면 검증되지 않은 자동화를 빠르게 확산시키는가?',
+      },
+      {
+        name: '토론 질문',
+        value: digest.discussionQuestion || 'KELS 연구 맥락에서 이 repo를 실험한다면 어떤 학습 장면과 평가 지표를 먼저 정해야 할까요?',
+      },
+      {
+        name: 'Link',
+        value: repo.url,
+      },
+    )
+    .setFooter({ text: 'Source: GitHub. Selected against recent arXiv papers as this week’s stronger KELS tech signal.' })
+    .setTimestamp(new Date());
+}
+
 export function buildMonthlyRadarEmbed({ posts, deadlines, monthLabel }) {
   const grouped = groupPosts(posts);
   const topTags = countTopTags(posts).slice(0, 8);
@@ -225,10 +273,13 @@ export function buildDeadlineReminderEmbed(reminders, daysUntil) {
     .setTimestamp(new Date());
 }
 
-export function buildEventReminderEmbed(events) {
+export function buildEventReminderEmbed(events, {
+  title = 'KELS Event Reminder: 1 hour left',
+  description = 'Announcement channel event is starting soon.',
+} = {}) {
   return new EmbedBuilder()
-    .setTitle('KELS Event Reminder: 1 hour left')
-    .setDescription('Announcement에 올라온 이벤트가 곧 시작합니다.')
+    .setTitle(title)
+    .setDescription(description)
     .setColor(0xb45309)
     .addFields({
       name: 'Upcoming',
@@ -274,7 +325,16 @@ function deadlineLine(deadline) {
 function eventReminderLine(event) {
   const post = event.post;
   const localTime = formatEventTime(event.startsAt, event.timeZone);
-  return `- **${localTime}** [#${post.channelName}](${postUrl(post)}) ${truncate(post.content, 130)}`;
+  const links = eventLinksLine(post.eventLinks);
+  return `- **${localTime}** [#${post.channelName}](${postUrl(post)}) ${truncate(post.content, 120)}${links}`;
+}
+
+function eventLinksLine(eventLinks = {}) {
+  const parts = [];
+  if (eventLinks.zoomLinks?.[0]) parts.push(`[Zoom](${eventLinks.zoomLinks[0]})`);
+  if (eventLinks.rsvpLinks?.[0]) parts.push(`[RSVP](${eventLinks.rsvpLinks[0]})`);
+  if (eventLinks.formLinks?.[0]) parts.push(`[Form](${eventLinks.formLinks[0]})`);
+  return parts.length ? ` | ${parts.join(' ')}` : '';
 }
 
 export function formatWatchList(keywords) {

@@ -1,9 +1,12 @@
 const URL_PATTERN = /https?:\/\/[^\s<>)\]]+/gi;
 const DATE_PATTERNS = [
   /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b/gi,
+  /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b(?!,?\s+\d{4})/gi,
   /\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/g,
   /\b\d{1,2}[-/.]\d{1,2}[-/.]\d{4}\b/g,
+  /\b\d{1,2}[-/.]\d{1,2}\b(?![-/.]\d{2,4})/g,
   /\d{1,2}\s*\uC6D4\s*\d{1,2}\s*\uC77C/g,
+  /\b(?:today|tomorrow)\b/gi,
 ];
 const TIME_PATTERN = /\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?\b/g;
 
@@ -58,6 +61,16 @@ export function extractUrls(text) {
   return Array.from(new Set(text.match(URL_PATTERN) ?? []));
 }
 
+export function extractEventLinks(text) {
+  const urls = extractUrls(String(text ?? ''));
+  return {
+    zoomLinks: urls.filter((url) => /zoom\.us|zoomgov\.com/i.test(url)),
+    rsvpLinks: urls.filter((url) => /rsvp|eventbrite|lu\.ma|calendar|calendly|signup|registration|register/i.test(url)),
+    formLinks: urls.filter((url) => /forms\.gle|docs\.google\.com\/forms|google\.com\/forms/i.test(url)),
+    otherLinks: urls.filter((url) => !/zoom\.us|zoomgov\.com|rsvp|eventbrite|lu\.ma|calendar|calendly|signup|registration|register|forms\.gle|docs\.google\.com\/forms|google\.com\/forms/i.test(url)),
+  };
+}
+
 export function extractDates(text) {
   const dates = DATE_PATTERNS.flatMap((pattern) => text.match(pattern) ?? []);
   return Array.from(new Set(dates.map((date) => date.trim())));
@@ -72,6 +85,18 @@ export function parseDateToIso(dateText, referenceDate = new Date()) {
     return isoDate(new Date(Date.UTC(Number(english[3]), month, Number(english[2]))));
   }
 
+  const englishNoYear = text.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+  if (englishNoYear) {
+    const month = MONTHS[englishNoYear[1].toLowerCase()];
+    if (month === undefined) return null;
+    const day = Number(englishNoYear[2]);
+    const current = new Date(referenceDate);
+    let year = current.getFullYear();
+    const candidate = new Date(Date.UTC(year, month, day));
+    if (candidate < floorUtcDate(current)) year += 1;
+    return isoDate(new Date(Date.UTC(year, month, day)));
+  }
+
   const ymd = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (ymd) {
     return isoDate(new Date(Date.UTC(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))));
@@ -80,6 +105,17 @@ export function parseDateToIso(dateText, referenceDate = new Date()) {
   const mdy = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (mdy) {
     return isoDate(new Date(Date.UTC(Number(mdy[3]), Number(mdy[1]) - 1, Number(mdy[2]))));
+  }
+
+  const mdNoYear = text.match(/^(\d{1,2})[-/.](\d{1,2})$/);
+  if (mdNoYear) {
+    const month = Number(mdNoYear[1]) - 1;
+    const day = Number(mdNoYear[2]);
+    const current = new Date(referenceDate);
+    let year = current.getFullYear();
+    const candidate = new Date(Date.UTC(year, month, day));
+    if (candidate < floorUtcDate(current)) year += 1;
+    return isoDate(new Date(Date.UTC(year, month, day)));
   }
 
   const korean = text.match(/^(\d{1,2})\s*\uC6D4\s*(\d{1,2})\s*\uC77C$/);
@@ -91,6 +127,16 @@ export function parseDateToIso(dateText, referenceDate = new Date()) {
     const candidate = new Date(Date.UTC(year, month, day));
     if (candidate < floorUtcDate(current)) year += 1;
     return isoDate(new Date(Date.UTC(year, month, day)));
+  }
+
+  if (/^today$/i.test(text)) {
+    return isoDate(floorUtcDate(new Date(referenceDate)));
+  }
+
+  if (/^tomorrow$/i.test(text)) {
+    const date = floorUtcDate(new Date(referenceDate));
+    date.setUTCDate(date.getUTCDate() + 1);
+    return isoDate(date);
   }
 
   return null;
@@ -168,6 +214,7 @@ export function normalizePost({ messageId, guildId, channelId, channelName, auth
     category,
     tags: extractTags(trimmed),
     urls: extractUrls(trimmed),
+    eventLinks: extractEventLinks(trimmed),
     dates: extractDates(trimmed),
     deadlineDates: extractDeadlineDates(trimmed, createdAt instanceof Date ? createdAt : new Date(createdAt)),
     eventDateTimes: extractEventDateTimes(trimmed, createdAt instanceof Date ? createdAt : new Date(createdAt)),
@@ -197,7 +244,7 @@ function isoDate(date) {
 }
 
 function floorUtcDate(date) {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function firstLikelyTime(context) {

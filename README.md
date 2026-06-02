@@ -15,13 +15,13 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, and `/topic-digest`.
 - **Public weekly article recommendation** from OpenAlex, limited to JLS, IJCSCL, ETR&D, Instructional Science, and Cognition and Instruction.
 - **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, and discussion questions.
-- **KELS Tech Signal** from recent arXiv AI/ML/HCI tech papers, translated into education technology and learning sciences implications.
-- **Announcement event reminders** that mention `@everyone` one hour before timed events, while excluding events that already started or lack time information.
+- **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, and discussion.
+- **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly research radar** and deadline reminders for indexed posts.
 - **Personal watchlists and profiles** for keyword and interest-topic DM alerts.
-- **KELS Archive Q&A** powered by local Qwen/Ollama when enabled.
-- **Self-introduction onboarding** that extracts the real full name from the introduction text and creates a `Full Name 님` thread.
-- **Role-tagging assistance** with hard blocks for admin and communication-officer roles.
+- **KELS Archive Q&A** powered by local Qwen/Ollama when enabled, with source links, channel/date evidence, relevance scores, related originals, and weak-evidence warnings.
+- **Self-introduction onboarding** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with personalized prompts.
+- **Role-tagging assistance** with confidence thresholds, moderator review for ambiguous matches, and hard blocks for admin and communication-officer roles.
 - **Spam cleanup** for obvious invite floods, free-Nitro scams, excessive URLs, excessive mentions, and repeated-message bursts.
 - **Optional Cloudflare Worker/D1 logging** for bot interaction logs.
 
@@ -34,6 +34,7 @@ flowchart LR
   Bot --> Qwen["Local Qwen/Ollama<br/>optional"]
   Bot --> OpenAlex["OpenAlex API"]
   Bot --> Arxiv["arXiv API"]
+  Bot --> GitHub["GitHub Search API"]
   Bot --> Cloudflare["Cloudflare Worker + D1<br/>optional logs"]
 
   Store --> Slash["Private Slash Commands"]
@@ -42,6 +43,7 @@ flowchart LR
   Qwen --> Schedules
   OpenAlex --> Schedules
   Arxiv --> Schedules
+  GitHub --> Schedules
 ```
 
 More detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -59,6 +61,8 @@ src/
   qwen.js         Local Qwen/Ollama prompts and fallbacks
   openalex.js     OpenAlex article recommendation source
   arxiv.js        arXiv Tech Signal source
+  github-repos.js GitHub repository Tech Signal source
+  relevance.js    Archive relevance and evidence ranking
   moderation.js   Spam detection
   logger.js       Local and optional Cloudflare logging
 
@@ -120,10 +124,10 @@ The main configuration groups are:
 - `DISCORD_*`: bot identity and target guild.
 - `INDEX_CHANNELS`: public channels/forums to archive.
 - `ARTICLE_DIGEST_*`: weekly OpenAlex article recommendation.
-- `TECH_SIGNAL_*`: weekly arXiv tech-paper signal.
+- `TECH_SIGNAL_*`: weekly arXiv-vs-GitHub tech signal.
 - `MONTHLY_RADAR_*`: monthly public community summary.
 - `DEADLINE_REMINDER_*`: D-14/D-7/D-2 deadline reminders.
-- `EVENT_REMINDER_*`: `@everyone` one-hour reminders for timed announcement events.
+- `EVENT_REMINDER_*`: `@everyone` one-hour reminders, D-1 reminders, event links, and follow-up threads for timed announcement events.
 - `QWEN_*`: local Ollama/Qwen enhancement.
 - `ROLE_*`: role-tagging behavior and safeguards.
 - `ONBOARDING_*`: self-introduction thread automation.

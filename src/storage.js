@@ -204,6 +204,51 @@ export class JsonStore {
     return events.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }
 
+  async getEventsOnDay({ daysFromNow = 1, sourceChannels = [], now = new Date(), timeZone = 'America/Los_Angeles' } = {}) {
+    const start = new Date(now);
+    start.setDate(start.getDate() + daysFromNow);
+    const targetIso = start.toISOString().slice(0, 10);
+    const channelKeys = new Set(sourceChannels.map((channel) => String(channel).toLowerCase()).filter(Boolean));
+    const events = [];
+
+    for (const post of await this.getAllPosts()) {
+      if (!postMatchesChannel(post, channelKeys)) continue;
+      if (!['event', 'events', 'seminar', 'seminars'].includes(mapCategory(post.category))) continue;
+      const postEvents = post.eventDateTimes?.length
+        ? post.eventDateTimes
+        : extractEventDateTimes(post.content ?? '', post.createdAt ? new Date(post.createdAt) : now, timeZone);
+      for (const event of postEvents) {
+        const eventMs = new Date(event.startsAt).getTime();
+        if (Number.isNaN(eventMs) || eventMs <= new Date(now).getTime()) continue;
+        if (event.iso === targetIso) events.push({ ...event, post });
+      }
+    }
+
+    return events.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  }
+
+  async getPastEventsNeedingFollowup({ sourceChannels = [], now = new Date(), windowMinutes = 1440, timeZone = 'America/Los_Angeles' } = {}) {
+    const nowMs = new Date(now).getTime();
+    const startMs = nowMs - windowMinutes * 60 * 1000;
+    const channelKeys = new Set(sourceChannels.map((channel) => String(channel).toLowerCase()).filter(Boolean));
+    const events = [];
+
+    for (const post of await this.getAllPosts()) {
+      if (!postMatchesChannel(post, channelKeys)) continue;
+      if (!['event', 'events', 'seminar', 'seminars'].includes(mapCategory(post.category))) continue;
+      const postEvents = post.eventDateTimes?.length
+        ? post.eventDateTimes
+        : extractEventDateTimes(post.content ?? '', post.createdAt ? new Date(post.createdAt) : now, timeZone);
+      for (const event of postEvents) {
+        const eventMs = new Date(event.startsAt).getTime();
+        if (Number.isNaN(eventMs)) continue;
+        if (eventMs > startMs && eventMs <= nowMs) events.push({ ...event, post });
+      }
+    }
+
+    return events.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  }
+
   async getState() {
     return readJson(this.stateFile, {});
   }
@@ -214,6 +259,13 @@ export class JsonStore {
     await writeJson(this.stateFile, state);
     return state;
   }
+}
+
+function postMatchesChannel(post, channelKeys) {
+  if (!channelKeys.size) return true;
+  const channelName = String(post.channelName ?? '').toLowerCase();
+  const channelId = String(post.channelId ?? '').toLowerCase();
+  return channelKeys.has(channelName) || channelKeys.has(channelId);
 }
 
 export function mapCategory(category) {

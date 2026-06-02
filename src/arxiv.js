@@ -111,7 +111,7 @@ export function buildTechPaperReason(paper) {
   return reasons.join(' · ') || 'recent arXiv tech paper with KELS relevance';
 }
 
-function scoreTechPaper(paper, now) {
+export function scoreTechPaper(paper, now = new Date()) {
   const text = `${paper.title} ${paper.summary}`.toLowerCase();
   const keywordScore = TECH_KEYWORDS.reduce((score, keyword) => (
     text.includes(keyword) ? score + keywordWeight(keyword) : score

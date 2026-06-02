@@ -94,9 +94,9 @@ export async function explainProfileMatchWithQwen(qwen, post, topics) {
   return cleanText(result?.reason, 360) || fallback;
 }
 
-export async function answerArchiveQuestionWithQwen(qwen, query, posts) {
-  const fallback = archiveFallback(query, posts);
-  return qwen.generateText(archivePrompt(query, posts), fallback, {
+export async function answerArchiveQuestionWithQwen(qwen, query, posts, { weakEvidence = false } = {}) {
+  const fallback = archiveFallback(query, posts, { weakEvidence });
+  return qwen.generateText(archivePrompt(query, posts, { weakEvidence }), fallback, {
     options: { num_predict: 650 },
   });
 }
@@ -104,6 +104,22 @@ export async function answerArchiveQuestionWithQwen(qwen, query, posts) {
 export async function summarizeTechPaperWithQwen(qwen, paper) {
   const fallback = techPaperFallback(paper);
   const result = await qwen.generateJson(techPaperPrompt(paper), null, {
+    schemaHint: '{"whyNow":"...","edTechApplication":"...","learningSciencesApplication":"...","issueTopic":"...","discussionQuestion":"..."}',
+    options: { num_predict: 520 },
+  });
+  if (!result) return fallback;
+  return {
+    whyNow: cleanText(result.whyNow, 300),
+    edTechApplication: cleanText(result.edTechApplication, 320),
+    learningSciencesApplication: cleanText(result.learningSciencesApplication, 320),
+    issueTopic: cleanText(result.issueTopic, 240),
+    discussionQuestion: cleanText(result.discussionQuestion, 220),
+  };
+}
+
+export async function summarizeGithubRepoWithQwen(qwen, repo) {
+  const fallback = techSignalFallback(repo);
+  const result = await qwen.generateJson(githubRepoPrompt(repo), null, {
     schemaHint: '{"whyNow":"...","edTechApplication":"...","learningSciencesApplication":"...","issueTopic":"...","discussionQuestion":"..."}',
     options: { num_predict: 520 },
   });
@@ -136,6 +152,42 @@ export async function buildOnboardingReplyWithQwen(qwen, { displayName, introTex
   return qwen.generateText(onboardingPrompt({ displayName, introText }), fallback, {
     options: { num_predict: 360 },
   });
+}
+
+export async function extractOnboardingProfileWithQwen(qwen, introText) {
+  const fallback = {
+    fullName: extractNameFallback(introText),
+    interests: [],
+    affiliation: '',
+    stage: '',
+    lookingFor: [],
+    recommendedChannels: ['academic-resources', 'cfp-rfp', 'job_academic'],
+    recommendedCommands: ['/profile action:add topic:<interest>', '/watch action:add keyword:<keyword>', '/ask-kels query:<question>'],
+    roleSuggestions: [],
+    confidence: 0.35,
+  };
+  const result = await qwen.generateJson(onboardingProfilePrompt(introText), fallback, {
+    schemaHint: '{"fullName":"...","interests":["..."],"affiliation":"...","stage":"...","lookingFor":["..."],"recommendedChannels":["academic-resources"],"recommendedCommands":["/profile action:add topic:<interest>"],"roleSuggestions":[{"role":"LearningAnalytics/EDM","confidence":0.84,"reason":"...","create":false}],"confidence":0.8}',
+    options: { num_predict: 520 },
+  });
+  return {
+    fullName: cleanFullName(result?.fullName) || fallback.fullName,
+    interests: cleanTextList(result?.interests, 6, 60),
+    affiliation: cleanText(result?.affiliation, 100),
+    stage: cleanText(result?.stage, 80),
+    lookingFor: cleanTextList(result?.lookingFor, 5, 80),
+    recommendedChannels: cleanChannelList(result?.recommendedChannels).slice(0, 4),
+    recommendedCommands: cleanTextList(result?.recommendedCommands, 4, 90),
+    roleSuggestions: Array.isArray(result?.roleSuggestions)
+      ? result.roleSuggestions.map((match) => ({
+        role: cleanRoleName(match.role),
+        confidence: Number.parseFloat(match.confidence ?? '0'),
+        reason: cleanText(match.reason, 220),
+        create: Boolean(match.create),
+      })).filter((match) => match.role && Number.isFinite(match.confidence)).slice(0, 3)
+      : [],
+    confidence: Number.parseFloat(result?.confidence ?? fallback.confidence),
+  };
 }
 
 export async function extractIntroFullNameWithQwen(qwen, introText) {
@@ -262,20 +314,21 @@ function profilePrompt(post, topics) {
   ].join('\n');
 }
 
-function archivePrompt(query, posts) {
+function archivePrompt(query, posts, { weakEvidence = false } = {}) {
   const context = posts.map((post, index) => [
-    `[${index + 1}] #${post.channelName} | ${post.category} | ${post.createdAt}`,
+    `[${index + 1}] #${post.channelName} | ${post.category} | ${post.createdAt} | relevance:${post.relevance ?? 'n/a'}`,
     `URL: https://discord.com/channels/${post.guildId}/${post.channelId}/${post.id}`,
     `Content: ${(post.content ?? '').replace(/\s+/g, ' ').slice(0, 700)}`,
   ].join('\n')).join('\n\n');
 
   return [
     'You answer questions about an indexed Discord archive for Korean edtech and learning sciences researchers.',
-    'Answer in Korean. Use only the provided archive snippets. If evidence is thin, say so.',
-    'Include short bullet points and source links using the provided URLs.',
+    'Answer in Korean. Use only the provided archive snippets. If evidence is thin, explicitly start with "근거 부족:".',
+    'For each claim, include source links using the provided URLs and mention date/channel when useful.',
     '',
     `Question: ${query}`,
     '',
+    weakEvidence ? 'Evidence status: weak. Do not over-answer.' : 'Evidence status: usable.',
     `Archive snippets:\n${context}`,
   ].join('\n');
 }
@@ -293,6 +346,24 @@ function techPaperPrompt(paper) {
     `Published: ${paper.publishedAt}`,
     `Authors: ${(paper.authors ?? []).join(', ')}`,
     `Abstract: ${paper.summary || 'No abstract available.'}`,
+  ].join('\n');
+}
+
+function githubRepoPrompt(repo) {
+  return [
+    '당신은 한국어를 쓰는 교육공학/learning sciences 연구자 커뮤니티를 돕는 기술 큐레이터입니다.',
+    '아래 GitHub repository를 KELS 회원이 이번 주에 볼 만한 연구/개발 신호로 번역하세요.',
+    '반드시 한국어로 답하고, repository 설명에서 확인되는 내용만 사용하세요.',
+    '추천 근거를 왜 지금 중요한가, 교육공학 적용, learning sciences 적용, 이슈테이킹 토픽, 토론 질문으로 분리하세요.',
+    '',
+    `Repository: ${repo.title}`,
+    `Description: ${repo.description || 'No description available.'}`,
+    `Stars: ${repo.stars}`,
+    `Forks: ${repo.forks}`,
+    `Language: ${repo.language}`,
+    `Topics: ${(repo.topics ?? []).join(', ')}`,
+    `Updated: ${repo.pushedAt}`,
+    `URL: ${repo.url}`,
   ].join('\n');
 }
 
@@ -349,6 +420,19 @@ function onboardingPrompt({ displayName, introText }) {
   ].join('\n');
 }
 
+function onboardingProfilePrompt(introText) {
+  return [
+    'Extract onboarding profile signals from this KELS Discord self-introduction.',
+    'Use the text only. Do not infer sensitive identity. Do not invent affiliations.',
+    'Recommend channels from: academic-resources, cfp-rfp, job_academic, job_practitioner, seminar-workshop, newsletter, introduction.',
+    'Recommend slash commands that help this member use the bot.',
+    'Suggest role tags for research areas, methods, domains, or career interests only.',
+    'Never suggest Admin, Admin & Facilitator, CommunicationOfficer, moderator, staff, or server-management roles.',
+    '',
+    `Self-introduction:\n${String(introText ?? '').slice(0, 2200)}`,
+  ].join('\n');
+}
+
 function nameExtractionPrompt(introText) {
   return [
     'Extract the person\'s real full name from this self-introduction message.',
@@ -360,12 +444,14 @@ function nameExtractionPrompt(introText) {
   ].join('\n');
 }
 
-function archiveFallback(query, posts) {
-  if (!posts.length) return `No indexed KELS posts matched: ${query}`;
+function archiveFallback(query, posts, { weakEvidence = false } = {}) {
+  if (!posts.length) return `근거 부족: "${query}"에 맞는 indexed KELS post를 찾지 못했습니다.`;
   return [
-    `Qwen is unavailable, so here are the top indexed matches for: ${query}`,
+    weakEvidence
+      ? `근거 부족: Qwen is unavailable and archive matches are weak for: ${query}`
+      : `Qwen is unavailable, so here are the top indexed matches for: ${query}`,
     ...posts.slice(0, 5).map((post, index) =>
-      `${index + 1}. #${post.channelName} ${post.content.slice(0, 180)}\nhttps://discord.com/channels/${post.guildId}/${post.channelId}/${post.id}`,
+      `${index + 1}. #${post.channelName} (${post.createdAt?.slice?.(0, 10) ?? 'n/a'}, relevance ${post.relevance ?? 'n/a'}) ${post.content.slice(0, 180)}\nhttps://discord.com/channels/${post.guildId}/${post.channelId}/${post.id}`,
     ),
   ].join('\n\n');
 }
@@ -377,6 +463,16 @@ function techPaperFallback(paper) {
     learningSciencesApplication: '학습자-도구-환경 상호작용, trace data 해석, 협력학습 또는 자기조절 지원의 분석 단위로 연결해 볼 수 있습니다.',
     issueTopic: '기술 성능 향상이 실제 학습자의 이해와 참여를 어떻게 바꾸는지 어디까지 연구 설계로 확인할 수 있을까요?',
     discussionQuestion: `이 논문(${paper.title})의 접근을 KELS 연구 맥락에 적용한다면 가장 먼저 검증해야 할 학습 성과는 무엇일까요?`,
+  };
+}
+
+function techSignalFallback(item) {
+  return {
+    whyNow: '최근 AI 기술 흐름 중 KELS 회원이 연구 아이디어와 프로토타입으로 번역해 볼 만한 신호입니다.',
+    edTechApplication: 'AI tutor, 자동 피드백, 수업 설계 도구, 연구용 프로토타입 설계 관점에서 적용 가능성을 검토할 수 있습니다.',
+    learningSciencesApplication: '학습자-도구-환경 상호작용, trace data 해석, 협력학습 또는 자기조절 지원의 분석 단위로 연결해 볼 수 있습니다.',
+    issueTopic: '기술적 가능성이 실제 학습 경험과 연구 설계의 질을 어떻게 바꾸는지 검증해야 합니다.',
+    discussionQuestion: `이 항목(${item.title})을 KELS 맥락에 적용한다면 가장 먼저 검증해야 할 학습 장면은 무엇일까요?`,
   };
 }
 
@@ -446,6 +542,18 @@ function cleanTag(value) {
     .replace(/[^\p{L}\p{N}_-]/gu, '')
     .trim()
     .slice(0, 32);
+}
+
+function cleanTextList(value, limit = 5, max = 80) {
+  return Array.isArray(value)
+    ? value.map((item) => cleanText(item, max)).filter(Boolean).slice(0, limit)
+    : [];
+}
+
+function cleanChannelList(value) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item ?? '').replace(/^#/, '').replace(/[^\w-]/g, '').trim()).filter(Boolean)
+    : [];
 }
 
 function cleanRoleName(value) {

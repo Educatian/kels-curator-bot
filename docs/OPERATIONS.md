@@ -77,6 +77,8 @@ Data persists in `./data`.
 6. Run `/health`.
 7. Run `/post-digest category:all days:7 channel:#newsletter`.
 8. Announce `/watch action:add keyword:<topic>` to members.
+9. For public curation checks, run `npm.cmd run article:demo` and `npm.cmd run tech-signal:demo`.
+10. For event automation, confirm `announcement` is in `INDEX_CHANNELS` and that event posts include date, time, and timezone.
 
 ## Privacy Defaults
 
@@ -84,3 +86,5 @@ Data persists in `./data`.
 - Only configured public channels/forums are indexed when `INDEX_CHANNELS` is set.
 - Local storage keeps short message snippets and extracted metadata.
 - Do not add sensitive/private channels to `INDEX_CHANNELS` without member notice.
+- Role auto-tagging assigns only high-confidence existing roles; ambiguous matches and new-role ideas go to moderator review.
+- Event reminders mention `@everyone` only for configured announcement-event reminders.
