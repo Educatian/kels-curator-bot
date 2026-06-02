@@ -18,7 +18,7 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
-- **Personal watchlists and profiles** for keyword and interest-topic DM alerts.
+- **Personal watchlists and profiles** for keyword and interest-topic DM alerts, plus recent related KELS originals that connect the member’s interests to the archive.
 - **KELS Archive Q&A** powered by local Qwen/Ollama when enabled, with source links, channel/date evidence, relevance scores, related originals, and weak-evidence warnings.
 - **Self-introduction onboarding** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with personalized prompts.
 - **Role-tagging assistance** with confidence thresholds, moderator review for ambiguous matches, and hard blocks for admin and communication-officer roles.
@@ -55,6 +55,7 @@ src/
   index.js        Discord client, event handlers, schedulers
   commands.js     Slash command definitions
   config.js       Environment configuration
+  connections.js  Interest-to-archive connection suggestions
   storage.js      JSON-backed local data store
   extractors.js   URL/date/time/category/tag extraction
   format.js       Discord embed and message formatting

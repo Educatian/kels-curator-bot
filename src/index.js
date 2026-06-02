@@ -8,6 +8,7 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from './arxiv.js';
+import { buildConnectionSuggestions, formatConnectionSuggestions } from './connections.js';
 import { loadConfig } from './config.js';
 import {
   buildCfpContent,
@@ -478,19 +479,30 @@ async function handleWatch(userId, action, keyword) {
 }
 
 async function handleProfile(userId, action, topic) {
+  let topics = [];
   if (action === 'list') {
-    return formatTopicList(await store.listProfileTopics(userId));
+    topics = await store.listProfileTopics(userId);
+    return formatProfileResponse(topics, await memberConnectionSuggestions(topics));
   }
   if (!topic.trim()) {
     return 'Please provide a topic for `add` or `remove`.';
   }
   if (action === 'add') {
-    return formatTopicList(await store.addProfileTopic(userId, topic));
+    topics = await store.addProfileTopic(userId, topic);
+    return formatProfileResponse(topics, await memberConnectionSuggestions(topics));
   }
   if (action === 'remove') {
-    return formatTopicList(await store.removeProfileTopic(userId, topic));
+    topics = await store.removeProfileTopic(userId, topic);
+    return formatProfileResponse(topics, await memberConnectionSuggestions(topics));
   }
   return 'Unknown profile action.';
+}
+
+function formatProfileResponse(topics, suggestions) {
+  return truncateDiscord([
+    formatTopicList(topics),
+    formatConnectionSuggestions(suggestions),
+  ].filter(Boolean).join('\n'), 1900);
 }
 
 async function handleAskKels(interaction, query, category) {
@@ -564,7 +576,8 @@ async function handleOnboardingIntro(post, message) {
     displayName: fullName,
     introText: post.content,
   });
-  const onboardingReply = formatOnboardingReply(reply, profile);
+  const connectionSuggestions = await memberConnectionSuggestions(profile.interests);
+  const onboardingReply = formatOnboardingReply(reply, profile, connectionSuggestions);
   await thread.send(truncateDiscord(onboardingReply, 1800)).catch(() => null);
   handled.add(message.id);
   await store.setStateValue('onboardingMessageIds', Array.from(handled).slice(-1000));
@@ -583,11 +596,12 @@ async function handleOnboardingIntro(post, message) {
       extractedFullName: extracted.fullName,
       confidence: extracted.confidence,
       profile,
+      connectionSuggestions,
     },
   });
 }
 
-function formatOnboardingReply(reply, profile) {
+function formatOnboardingReply(reply, profile, connectionSuggestions = null) {
   const lines = [reply];
   if (profile?.interests?.length) lines.push('', `관심분야: ${profile.interests.join(', ')}`);
   if (profile?.affiliation || profile?.stage) {
@@ -600,7 +614,19 @@ function formatOnboardingReply(reply, profile) {
   if (profile?.recommendedCommands?.length) {
     lines.push(`추천 slash: ${profile.recommendedCommands.map((command) => `\`${command}\``).join(' ')}`);
   }
+  const connectionText = formatConnectionSuggestions(connectionSuggestions, {
+    emptyText: '아직 자기소개 관심사와 강하게 연결되는 최근 원문은 적지만, 앞으로 관련 글이 올라오면 개인 알림과 추천으로 이어집니다.',
+  });
+  if (connectionText) lines.push(connectionText);
   return lines.filter(Boolean).join('\n');
+}
+
+async function memberConnectionSuggestions(topics) {
+  const cleanTopics = (topics ?? []).map((item) => String(item ?? '').trim()).filter(Boolean);
+  if (!cleanTopics.length) return null;
+  const posts = (await store.getPosts({ category: 'all', days: 180 }))
+    .filter((post) => !post.guildId || post.guildId === config.guildId);
+  return buildConnectionSuggestions({ topics: cleanTopics, posts, limit: 3 });
 }
 
 function onboardingThreadName(fullName) {

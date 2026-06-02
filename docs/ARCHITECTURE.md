@@ -17,6 +17,7 @@ flowchart TD
 
   subgraph Bot["KELS Curator Bot"]
     Client["Discord client<br/>src/index.js"]
+    Connections["Interest connections<br/>src/connections.js"]
     Extractors["Extractors<br/>src/extractors.js"]
     Store["JSON store<br/>src/storage.js"]
     Format["Embed/message formatter<br/>src/format.js"]
@@ -37,6 +38,7 @@ flowchart TD
 
   Messages --> Client
   Slash --> Client
+  Client --> Connections
   Client --> Moderation
   Client --> Extractors
   Extractors --> Store
@@ -103,6 +105,12 @@ Builds slash command payloads. The bot currently supports 14 commands:
 - `/help-kels`
 
 Command registration is handled by `scripts/register-commands.js`.
+
+### `src/connections.js`
+
+Builds interest-to-archive suggestions for members.
+
+When members use `/profile` or introduce themselves, the bot ranks recent KELS archive posts against their interests and returns up to three related originals with channel, date, relevance, and a connection question. This turns profile setup into an immediate community-entry path.
 
 ### `src/extractors.js`
 
