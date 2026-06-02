@@ -15,6 +15,7 @@ describe('slash commands', () => {
       'field-map',
       'venue-scout',
       'field-pulse',
+      'anon-submit',
       'submit-cfp',
       'backfill',
       'stats',

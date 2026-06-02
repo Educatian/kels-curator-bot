@@ -175,6 +175,30 @@ export function buildCommands() {
           .setMaxValue(60),
       ),
     new SlashCommandBuilder()
+      .setName('anon-submit')
+      .setDescription('Submit an anonymous advice request for moderator review.')
+      .addStringOption((option) =>
+        option
+          .setName('category')
+          .setDescription('Advice category')
+          .setRequired(true)
+          .addChoices(
+            { name: 'career', value: 'career' },
+            { name: 'paper-research', value: 'paper-research' },
+            { name: 'grad-school', value: 'grad-school' },
+            { name: 'teaching', value: 'teaching' },
+            { name: 'community', value: 'community' },
+            { name: 'other', value: 'other' },
+          ),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('text')
+          .setDescription('Your concern or question. It will be reviewed before anonymous posting.')
+          .setRequired(true)
+          .setMaxLength(1800),
+      ),
+    new SlashCommandBuilder()
       .setName('submit-cfp')
       .setDescription('Create a clean CFP/RFP entry for the archive.')
       .addStringOption((option) =>

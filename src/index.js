@@ -16,6 +16,9 @@ import {
   buildDeadlineReminderEmbed,
   buildDigestEmbed,
   buildHelpEmbed,
+  buildAnonymousAdvicePostPayload,
+  buildAnonymousReviewClosedPayload,
+  buildAnonymousReviewPayload,
   buildArticleRecommendationEmbed,
   buildEventReminderEmbed,
   buildFieldExplorerEmbed,
@@ -118,8 +121,13 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
   try {
+  if (interaction.isButton()) {
+    await handleButtonInteraction(interaction);
+    return;
+  }
+
+  if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === 'digest') {
     const category = interaction.options.getString('category') ?? 'all';
@@ -292,6 +300,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'anon-submit') {
+    await interaction.deferReply({ ephemeral: true });
+    const category = interaction.options.getString('category', true);
+    const text = interaction.options.getString('text', true);
+    const result = await handleAnonymousSubmission(interaction, { category, text });
+    await interaction.editReply(result);
+    return;
+  }
+
   if (interaction.commandName === 'submit-cfp') {
     const title = interaction.options.getString('title', true);
     const deadline = interaction.options.getString('deadline', true);
@@ -395,13 +412,161 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function respondWithError(interaction, error) {
-  console.error(`Failed to handle /${interaction.commandName}`, error);
+  console.error(`Failed to handle interaction ${interaction.commandName ?? interaction.customId ?? interaction.id}`, error);
   const payload = { content: 'Sorry, KELS Curator hit an internal error while handling that command.', ephemeral: true };
   if (interaction.deferred || interaction.replied) {
     await interaction.followUp(payload).catch(() => null);
   } else {
     await interaction.reply(payload).catch(() => null);
   }
+}
+
+async function handleButtonInteraction(interaction) {
+  if (!interaction.customId?.startsWith('anon:')) return;
+  await handleAnonymousReviewAction(interaction);
+}
+
+async function handleAnonymousSubmission(interaction, { category, text }) {
+  if (!config.anonymousAdviceEnabled) {
+    return '익명 고민상담 제출 기능이 아직 켜져 있지 않습니다.';
+  }
+  if (!config.anonymousAdviceReviewChannelId || !config.anonymousAdvicePostChannelId) {
+    return '익명 고민상담 채널 설정이 아직 완료되지 않았습니다.';
+  }
+
+  const cleanText = sanitizeAnonymousText(text);
+  if (cleanText.length < config.anonymousAdviceMinLength) {
+    return `고민 내용을 조금만 더 구체적으로 적어주세요. 최소 ${config.anonymousAdviceMinLength}자 이상이 필요합니다.`;
+  }
+
+  const submissions = await getAnonymousSubmissions();
+  const recentCount = submissions.filter((submission) =>
+    submission.authorId === interaction.user.id
+    && Date.now() - new Date(submission.createdAt).getTime() < 24 * 60 * 60 * 1000
+  ).length;
+  if (recentCount >= config.anonymousAdviceDailyLimit) {
+    return `하루 익명 제출 한도(${config.anonymousAdviceDailyLimit}개)에 도달했습니다. 내일 다시 제출해주세요.`;
+  }
+
+  const submission = {
+    id: anonymousSubmissionId(),
+    publicNumber: nextAnonymousPublicNumber(submissions),
+    category,
+    text: cleanText,
+    authorId: interaction.user.id,
+    authorName: interaction.user.username,
+    guildId: interaction.guildId,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    reviewMessageId: null,
+    publicMessageId: null,
+    reviewerId: null,
+    reviewedAt: null,
+  };
+
+  const reviewChannel = await client.channels.fetch(config.anonymousAdviceReviewChannelId).catch(() => null);
+  if (!reviewChannel?.isTextBased?.()) {
+    return '운영자 검토 채널을 찾을 수 없습니다. 설정을 확인해주세요.';
+  }
+
+  const reviewMessage = await reviewChannel.send(buildAnonymousReviewPayload(submission));
+  submission.reviewMessageId = reviewMessage.id;
+  submissions.push(submission);
+  await setAnonymousSubmissions(submissions);
+
+  return [
+    `익명 고민 #${submission.publicNumber}으로 접수됐습니다.`,
+    '운영자 검토 후 공개 채널에 작성자 정보 없이 게시됩니다.',
+    '단, abuse 대응을 위해 운영자 검토 화면에는 제출자 정보가 최소한으로 표시됩니다.',
+  ].join('\n');
+}
+
+async function handleAnonymousReviewAction(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({ content: '이 버튼은 운영자만 사용할 수 있습니다.', ephemeral: true });
+    return;
+  }
+
+  const [, action, submissionId] = interaction.customId.split(':');
+  const submissions = await getAnonymousSubmissions();
+  const index = submissions.findIndex((submission) => submission.id === submissionId);
+  const submission = submissions[index];
+  if (!submission) {
+    await interaction.reply({ content: '해당 익명 제출을 찾을 수 없습니다.', ephemeral: true });
+    return;
+  }
+  if (submission.status !== 'pending') {
+    await interaction.reply({ content: `이미 처리된 제출입니다: ${submission.status}`, ephemeral: true });
+    return;
+  }
+
+  if (action === 'reject') {
+    submission.status = 'rejected';
+    submission.reviewerId = interaction.user.id;
+    submission.reviewedAt = new Date().toISOString();
+    submissions[index] = submission;
+    await setAnonymousSubmissions(submissions);
+    await interaction.update(buildAnonymousReviewClosedPayload(submission, '반려됨', interaction.user.id));
+    return;
+  }
+
+  if (action !== 'approve') {
+    await interaction.reply({ content: '알 수 없는 익명 고민 처리 액션입니다.', ephemeral: true });
+    return;
+  }
+
+  const postChannel = await client.channels.fetch(config.anonymousAdvicePostChannelId).catch(() => null);
+  if (!postChannel?.isTextBased?.()) {
+    await interaction.reply({ content: '익명 고민 공개 채널을 찾을 수 없습니다.', ephemeral: true });
+    return;
+  }
+
+  const publicMessage = await postChannel.send(buildAnonymousAdvicePostPayload(submission));
+  await publicMessage.startThread({
+    name: `익명 고민 #${submission.publicNumber}`,
+    autoArchiveDuration: 1440,
+    reason: 'KELS anonymous advice thread',
+  }).catch((error) => {
+    console.warn(`Failed to create anonymous advice thread: ${error.message}`);
+    return null;
+  });
+
+  submission.status = 'approved';
+  submission.publicMessageId = publicMessage.id;
+  submission.publicChannelId = publicMessage.channelId;
+  submission.reviewerId = interaction.user.id;
+  submission.reviewedAt = new Date().toISOString();
+  submissions[index] = submission;
+  await setAnonymousSubmissions(submissions);
+  await interaction.update(buildAnonymousReviewClosedPayload(submission, '게시됨', interaction.user.id));
+}
+
+async function getAnonymousSubmissions() {
+  const state = await store.getState();
+  return Array.isArray(state.anonymousAdviceSubmissions) ? state.anonymousAdviceSubmissions : [];
+}
+
+async function setAnonymousSubmissions(submissions) {
+  await store.setStateValue('anonymousAdviceSubmissions', submissions.slice(-1000));
+}
+
+function anonymousSubmissionId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function nextAnonymousPublicNumber(submissions) {
+  const max = submissions.reduce((value, submission) => Math.max(value, Number(submission.publicNumber) || 0), 0);
+  return String(max + 1).padStart(3, '0');
+}
+
+function sanitizeAnonymousText(text) {
+  return String(text ?? '')
+    .normalize('NFKC')
+    .replace(/@everyone/gi, '@\u200beveryone')
+    .replace(/@here/gi, '@\u200bhere')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1800);
 }
 
 async function buildRuntimeHealth(interaction) {

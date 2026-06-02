@@ -110,6 +110,11 @@ export function loadConfig() {
     spamAutoDeleteEnabled: bool(process.env.SPAM_AUTO_DELETE_ENABLED),
     spamMaxUrls: intEnv('SPAM_MAX_URLS', 4, { min: 1, max: 20 }),
     spamMaxMentions: intEnv('SPAM_MAX_MENTIONS', 8, { min: 1, max: 100 }),
+    anonymousAdviceEnabled: bool(process.env.ANON_ADVICE_ENABLED),
+    anonymousAdviceReviewChannelId: process.env.ANON_ADVICE_REVIEW_CHANNEL_ID ?? '',
+    anonymousAdvicePostChannelId: process.env.ANON_ADVICE_POST_CHANNEL_ID ?? '',
+    anonymousAdviceDailyLimit: intEnv('ANON_ADVICE_DAILY_LIMIT', 2, { min: 1, max: 20 }),
+    anonymousAdviceMinLength: intEnv('ANON_ADVICE_MIN_LENGTH', 20, { min: 1, max: 1000 }),
     openAlexMailto: process.env.OPENALEX_MAILTO ?? '',
     dataDir: path.resolve(process.env.DATA_DIR ?? './data'),
   };

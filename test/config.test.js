@@ -55,6 +55,9 @@ describe('config', () => {
     expect(config.spamAutoDeleteEnabled).toBe(false);
     expect(config.spamMaxUrls).toBe(4);
     expect(config.spamMaxMentions).toBe(8);
+    expect(config.anonymousAdviceEnabled).toBe(false);
+    expect(config.anonymousAdviceDailyLimit).toBe(2);
+    expect(config.anonymousAdviceMinLength).toBe(20);
   });
 
   it('rejects invalid numeric settings', async () => {

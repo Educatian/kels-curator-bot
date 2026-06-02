@@ -1,4 +1,9 @@
-import { EmbedBuilder } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+} from 'discord.js';
 import { buildTechPaperReason } from './arxiv.js';
 import { buildGithubRepoReason } from './github-repos.js';
 import { buildKnowledgeFlow, buildParticipationNudge } from './knowledge-flow.js';
@@ -17,6 +22,15 @@ const CATEGORY_LABELS = {
   events: 'Events',
   event: 'Events',
   general: 'General',
+};
+
+const ANON_CATEGORY_LABELS = {
+  career: '진로/커리어',
+  'paper-research': '논문/연구',
+  'grad-school': '유학/대학원',
+  teaching: '수업/티칭',
+  community: '커뮤니티/관계',
+  other: '기타',
 };
 
 function truncate(text, max = 240) {
@@ -196,6 +210,91 @@ export function buildVenueScoutEmbed({
   });
 
   return embed;
+}
+
+export function buildAnonymousReviewPayload(submission) {
+  const embed = new EmbedBuilder()
+    .setTitle(`익명 고민 검토: #${submission.publicNumber}`)
+    .setDescription(truncate(submission.text, 1800))
+    .setColor(0x7c3aed)
+    .addFields(
+      {
+        name: 'Category',
+        value: ANON_CATEGORY_LABELS[submission.category] ?? submission.category,
+        inline: true,
+      },
+      {
+        name: 'Submitted by',
+        value: `<@${submission.authorId}> (${submission.authorId})`,
+        inline: true,
+      },
+      {
+        name: 'Privacy note',
+        value: '공개 게시에는 작성자 정보가 포함되지 않습니다. abuse 대응을 위해 운영자 검토 화면에만 제출자가 표시됩니다.',
+      },
+    )
+    .setFooter({ text: `Submission ID: ${submission.id}` })
+    .setTimestamp(new Date(submission.createdAt));
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`anon:approve:${submission.id}`)
+      .setLabel('익명 게시')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`anon:reject:${submission.id}`)
+      .setLabel('반려')
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  return {
+    content: '새 익명 고민 제출이 들어왔습니다. 운영자 검토 후 게시/반려를 선택해주세요.',
+    embeds: [embed],
+    components: [row],
+    allowedMentions: { parse: [] },
+  };
+}
+
+export function buildAnonymousReviewClosedPayload(submission, actionLabel, reviewerId) {
+  const embed = new EmbedBuilder()
+    .setTitle(`익명 고민 ${actionLabel}: #${submission.publicNumber}`)
+    .setDescription(truncate(submission.text, 1800))
+    .setColor(actionLabel === '게시됨' ? 0x047857 : 0xb91c1c)
+    .addFields(
+      {
+        name: 'Category',
+        value: ANON_CATEGORY_LABELS[submission.category] ?? submission.category,
+        inline: true,
+      },
+      {
+        name: 'Reviewed by',
+        value: `<@${reviewerId}>`,
+        inline: true,
+      },
+    )
+    .setFooter({ text: `Submission ID: ${submission.id}` })
+    .setTimestamp(new Date());
+
+  return {
+    content: `익명 고민 #${submission.publicNumber} ${actionLabel}.`,
+    embeds: [embed],
+    components: [],
+    allowedMentions: { parse: [] },
+  };
+}
+
+export function buildAnonymousAdvicePostPayload(submission) {
+  const category = ANON_CATEGORY_LABELS[submission.category] ?? submission.category;
+  return {
+    content: [
+      `**익명 고민 #${submission.publicNumber} | ${category}**`,
+      '',
+      submission.text,
+      '',
+      '답변은 이 글의 thread에 남겨주세요. 조언은 따뜻하고 구체적으로 부탁드립니다.',
+    ].join('\n'),
+    allowedMentions: { parse: [] },
+  };
 }
 
 export function buildFieldPulseEmbed({
@@ -555,6 +654,7 @@ export function buildHelpEmbed() {
           '`/field-map query:"multimodal learning analytics"`',
           '`/venue-scout text:"paper abstract or project idea"`',
           '`/field-pulse days:14`',
+          '`/anon-submit category:career text:"..."`',
           '`/submit-cfp title:... deadline:... url:...`',
         ].join('\n'),
       },

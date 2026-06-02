@@ -12,13 +12,14 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 
 ## Core Features
 
-- **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, `/topic-digest`, `/field-map`, `/venue-scout`, and `/field-pulse`.
+- **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, `/topic-digest`, `/field-map`, `/venue-scout`, `/field-pulse`, and `/anon-submit`.
 - **Public weekly article recommendation** from OpenAlex, limited to JLS, IJCSCL, ETR&D, Instructional Science, and Cognition and Instruction.
 - **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, discussion questions, and a participation prompt.
 - **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
 - **FieldExplorer 1.0 bridge** that positions a topic, abstract, CFP, or project idea against the latest `Educatian/fieldexplorer1.0` venue/category map, links to the public app, and connects results back to related KELS archive originals.
 - **Venue Scout** that turns an abstract or project idea into strong/adjacent/exploratory journal and conference lanes, with framing guidance and related KELS originals.
 - **Field Pulse** that summarizes recent KELS activity as community signals, FieldExplorer category positions, bridge opportunities, and discussion seeds.
+- **Anonymous advice workflow** where members privately submit concerns, moderators approve or reject in an admin channel, and approved items are posted without author identity to a dedicated advice channel.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
 - **Automatic community reactions** that add the KELS custom emoji and a like emoji to indexed member posts and thread replies.
@@ -143,6 +144,7 @@ The main configuration groups are:
 - `ROLE_*`: role-tagging behavior and safeguards.
 - `ONBOARDING_*`: self-introduction pathway automation and one-week follow-up.
 - `SPAM_*`: automatic spam deletion thresholds.
+- `ANON_ADVICE_*`: anonymous advice submission, moderator review, and public anonymous posting.
 - `KELS_LOG_*`: optional Cloudflare logging endpoint.
 
 Never commit `.env`, local `data/`, `logs/`, bot PID files, or Cloudflare `.dev.vars`.
