@@ -13,7 +13,7 @@ function message(content, overrides = {}) {
       everyone: Boolean(overrides.everyone),
     },
     embeds: [],
-    attachments: new Map(),
+    attachments: overrides.attachments ?? new Map(),
   };
 }
 
@@ -28,5 +28,19 @@ describe('spam moderation', () => {
 
   it('detects mention floods', () => {
     expect(detectSpam(message('hello', { userMentions: 8 }), config)).toBe('too many mentions (8)');
+  });
+
+  it('does not treat @everyone alone as spam', () => {
+    expect(detectSpam(message('@everyone seminar reminder tomorrow', { everyone: true }), config)).toBeNull();
+  });
+
+  it('does not count attachment URLs as visible URL spam', () => {
+    const attachments = new Map([
+      ['1', { name: 'a.png', url: 'https://cdn.discordapp.com/a.png' }],
+      ['2', { name: 'b.png', url: 'https://cdn.discordapp.com/b.png' }],
+      ['3', { name: 'c.png', url: 'https://cdn.discordapp.com/c.png' }],
+      ['4', { name: 'd.png', url: 'https://cdn.discordapp.com/d.png' }],
+    ]);
+    expect(detectSpam(message('Project share https://project.example', { attachments }), config)).toBeNull();
   });
 });

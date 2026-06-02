@@ -16,13 +16,14 @@ export function detectSpam(message, config) {
   const text = getMessageText(message);
   if (!text.trim()) return null;
 
-  const urls = text.match(/https?:\/\/\S+/gi) ?? [];
+  const visibleText = getVisibleMessageText(message);
+  const urls = visibleText.match(/https?:\/\/\S+/gi) ?? [];
   if (urls.length >= config.spamMaxUrls) {
     return `too many URLs (${urls.length})`;
   }
 
   const mentions = (message.mentions?.users?.size ?? 0) + (message.mentions?.roles?.size ?? 0);
-  if (mentions >= config.spamMaxMentions || message.mentions?.everyone) {
+  if (mentions >= config.spamMaxMentions) {
     return `too many mentions (${mentions})`;
   }
 
@@ -58,6 +59,14 @@ function getMessageText(message) {
   }
   for (const attachment of message.attachments?.values?.() ?? []) {
     parts.push(attachment.name ?? '', attachment.url ?? '');
+  }
+  return parts.join('\n');
+}
+
+function getVisibleMessageText(message) {
+  const parts = [message.content ?? ''];
+  for (const embed of message.embeds ?? []) {
+    parts.push(embed.title ?? '', embed.description ?? '', embed.url ?? '');
   }
   return parts.join('\n');
 }

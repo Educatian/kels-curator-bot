@@ -80,9 +80,10 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
   ],
-  partials: [Partials.Channel],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User],
 });
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -120,6 +121,14 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    await logReactionAdd(reaction, user);
+  } catch (error) {
+    console.error('Failed to log reaction add', error);
+  }
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
   if (interaction.isButton()) {
@@ -128,6 +137,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) return;
+  await logSlashCommandUsage(interaction);
 
   if (interaction.commandName === 'digest') {
     const category = interaction.options.getString('category') ?? 'all';
@@ -419,6 +429,84 @@ async function respondWithError(interaction, error) {
   } else {
     await interaction.reply(payload).catch(() => null);
   }
+}
+
+async function logSlashCommandUsage(interaction) {
+  const options = slashOptions(interaction);
+  const query = slashQueryExcerpt(interaction.commandName, options);
+  await chatLogger.log({
+    eventType: 'slash-command',
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    channelName: displayChannelName(interaction.channel),
+    userId: interaction.user.id,
+    userName: interaction.user.username,
+    commandName: interaction.commandName,
+    query,
+    metadata: {
+      interactionId: interaction.id,
+      options,
+    },
+  });
+}
+
+async function logReactionAdd(reaction, user) {
+  if (user?.bot) return;
+  const resolvedReaction = reaction.partial ? await reaction.fetch().catch(() => reaction) : reaction;
+  const message = resolvedReaction.message?.partial
+    ? await resolvedReaction.message.fetch().catch(() => resolvedReaction.message)
+    : resolvedReaction.message;
+  const emoji = reactionEmojiLabel(resolvedReaction.emoji);
+  await chatLogger.log({
+    eventType: 'reaction-add',
+    guildId: message.guildId ?? '',
+    channelId: message.channelId ?? '',
+    channelName: displayChannelName(message.channel),
+    userId: user.id,
+    userName: user.username,
+    query: emoji,
+    responseExcerpt: getMessageText(message).slice(0, 500),
+    metadata: {
+      messageId: message.id,
+      emoji,
+      emojiId: resolvedReaction.emoji?.id ?? '',
+      emojiName: resolvedReaction.emoji?.name ?? '',
+      messageUrl: message.url ?? '',
+      messageAuthorId: message.author?.id ?? '',
+      messageAuthorName: message.author?.username ?? '',
+    },
+  });
+}
+
+function slashOptions(interaction) {
+  return Object.fromEntries(interaction.options.data.map((option) => [
+    option.name,
+    option.name === 'text' && interaction.commandName === 'anon-submit'
+      ? '[redacted anonymous text]'
+      : slashOptionValue(option),
+  ]));
+}
+
+function slashOptionValue(option) {
+  if (option.channel) return `#${displayChannelName(option.channel)} (${option.channel.id})`;
+  if (option.user) return `${option.user.username} (${option.user.id})`;
+  if (option.role) return `${option.role.name} (${option.role.id})`;
+  return option.value ?? '';
+}
+
+function slashQueryExcerpt(commandName, options) {
+  if (commandName === 'anon-submit') {
+    return `category=${options.category ?? ''}; text=[redacted anonymous text]`;
+  }
+  return Object.entries(options)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('; ');
+}
+
+function reactionEmojiLabel(emoji) {
+  if (!emoji) return '';
+  if (emoji.id) return `${emoji.name}:${emoji.id}`;
+  return emoji.name ?? '';
 }
 
 async function handleButtonInteraction(interaction) {
