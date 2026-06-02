@@ -50,6 +50,21 @@
       gap: 32px;
     }
 
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .kels-logo {
+      width: 112px;
+      height: 112px;
+      border-radius: 20px;
+      border: 1px solid rgba(22, 32, 51, 0.10);
+      box-shadow: 0 18px 44px rgba(31, 44, 74, 0.18);
+      flex: 0 0 auto;
+    }
+
     .eyebrow {
       margin: 0 0 10px;
       color: var(--teal);
@@ -62,7 +77,7 @@
     h1 {
       margin: 0;
       max-width: 930px;
-      font-size: 72px;
+      font-size: 66px;
       line-height: 0.98;
       letter-spacing: 0;
     }
@@ -267,8 +282,13 @@
   <main class="canvas">
     <header>
       <div>
-        <p class="eyebrow">KELS Discord Research Community</p>
-        <h1>KELS Curator Bot</h1>
+        <div class="brand">
+          <img class="kels-logo" src="assets/kels-logo-official.png" alt="KELS logo">
+          <div>
+            <p class="eyebrow">KELS Discord Research Community</p>
+            <h1>KELS Curator Bot</h1>
+          </div>
+        </div>
         <div class="badge-row">
           <span class="badge">Discord.js</span>
           <span class="badge">OpenAlex</span>

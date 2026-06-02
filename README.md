@@ -1,5 +1,9 @@
 # KELS Curator Bot
 
+<p align="center">
+  <img src="docs/assets/kels-logo-official.png" alt="KELS logo" width="120">
+</p>
+
 ![KELS Curator Bot showcase](docs/assets/kels-curator-showcase.png)
 
 KELS Curator Bot is a Discord community curator for Korean edtech and learning sciences researchers. It indexes useful public channel posts, supports private slash-command search and digests, posts research-resource recommendations, assists onboarding, and helps moderators keep the server clean.
