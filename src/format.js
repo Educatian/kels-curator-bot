@@ -1,0 +1,432 @@
+import { EmbedBuilder } from 'discord.js';
+import { buildTechPaperReason } from './arxiv.js';
+import { buildRecommendationReason } from './openalex.js';
+import { mapCategory } from './storage.js';
+
+const CATEGORY_LABELS = {
+  all: 'All KELS items',
+  jobs: 'Jobs',
+  job: 'Jobs',
+  cfp: 'CFP/RFP',
+  seminars: 'Seminars and workshops',
+  seminar: 'Seminars and workshops',
+  resources: 'Academic resources',
+  resource: 'Academic resources',
+  events: 'Events',
+  event: 'Events',
+  general: 'General',
+};
+
+function truncate(text, max = 240) {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 3).trim()}...`;
+}
+
+function postUrl(post) {
+  return `https://discord.com/channels/${post.guildId}/${post.channelId}/${post.id}`;
+}
+
+function lineFor(post) {
+  const dateText = post.dates?.length ? ` | dates: ${post.dates.slice(0, 2).join(', ')}` : '';
+  const tagText = post.tags?.length ? ` | ${post.tags.slice(0, 3).map((tag) => `#${tag}`).join(' ')}` : '';
+  const linkText = post.urls?.[0] ? ` | [link](${post.urls[0]})` : '';
+  return `- [#${post.channelName}](${postUrl(post)}) ${truncate(post.content, 150)}${dateText}${tagText}${linkText}`;
+}
+
+export function buildDigestEmbed(posts, { category = 'all', days = 7 } = {}) {
+  const grouped = groupPosts(posts);
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Digest: ${CATEGORY_LABELS[category] ?? category}`)
+    .setDescription(posts.length ? `Recent items from the last ${days} day(s).` : `No indexed items found in the last ${days} day(s).`)
+    .setColor(0x1d4ed8)
+    .setTimestamp(new Date());
+
+  for (const [group, items] of Object.entries(grouped).slice(0, 5)) {
+    embed.addFields({
+      name: CATEGORY_LABELS[group] ?? group,
+      value: items.slice(0, 5).map(lineFor).join('\n').slice(0, 1000) || 'No items.',
+    });
+  }
+
+  return embed;
+}
+
+export function buildSearchEmbed(posts, query, category = 'all') {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Search: ${query}`)
+    .setDescription(posts.length ? `Top ${Math.min(posts.length, 8)} result(s), category: ${category}.` : 'No matching indexed posts.')
+    .setColor(0x047857)
+    .setTimestamp(new Date());
+
+  if (posts.length) {
+    embed.addFields({
+      name: 'Results',
+      value: posts.slice(0, 8).map(lineFor).join('\n').slice(0, 1000),
+    });
+  }
+
+  return embed;
+}
+
+export function buildDeadlinesEmbed(deadlines, { days = 60, category = 'all' } = {}) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Deadlines: ${CATEGORY_LABELS[category] ?? category}`)
+    .setDescription(
+      deadlines.length
+        ? `Upcoming extracted deadline(s) in the next ${days} day(s).`
+        : `No indexed deadlines found in the next ${days} day(s).`,
+    )
+    .setColor(0xdc2626)
+    .setTimestamp(new Date());
+
+  if (deadlines.length) {
+    embed.addFields({
+      name: 'Upcoming',
+      value: deadlines.slice(0, 12).map(deadlineLine).join('\n').slice(0, 1000),
+    });
+  }
+
+  return embed;
+}
+
+export function buildArticleRecommendationEmbed(article, qwenSummary = null) {
+  const authors = article.authors?.length ? article.authors.join(', ') : 'Authors unavailable';
+  const abstract = article.abstract ? truncate(article.abstract, 420) : 'Abstract unavailable from OpenAlex.';
+
+  return new EmbedBuilder()
+    .setTitle('KELS 이 주의 추천 아티클')
+    .setDescription(`**${article.title}**`)
+    .setColor(0x7c3aed)
+    .addFields(
+      {
+        name: 'Journal',
+        value: article.source || 'Unknown journal',
+        inline: true,
+      },
+      {
+        name: 'Date',
+        value: article.publicationDate || 'Unknown date',
+        inline: true,
+      },
+      {
+        name: 'Authors',
+        value: truncate(authors, 220),
+      },
+      {
+        name: '선정 이유',
+        value: buildRecommendationReason(article),
+      },
+      ...articleSummaryFields(qwenSummary),
+      {
+        name: '초록 미리보기',
+        value: abstract,
+      },
+      {
+        name: 'Link',
+        value: article.url,
+      },
+    )
+    .setFooter({ text: 'Source: OpenAlex. Journal pool: JLS, IJCSCL, ETR&D, Instructional Science, Cognition and Instruction.' })
+    .setTimestamp(new Date());
+}
+
+export function buildTechSignalEmbed(paper, qwenDigest = null) {
+  const authors = paper.authors?.length ? paper.authors.join(', ') : 'Authors unavailable';
+  const digest = qwenDigest ?? {};
+
+  return new EmbedBuilder()
+    .setTitle('KELS Tech Signal')
+    .setDescription(`**${paper.title}**`)
+    .setColor(0x0f766e)
+    .addFields(
+      {
+        name: 'arXiv',
+        value: paper.primaryCategory || paper.categories?.[0] || 'Unknown category',
+        inline: true,
+      },
+      {
+        name: 'Date',
+        value: paper.publishedAt ? paper.publishedAt.slice(0, 10) : 'Unknown date',
+        inline: true,
+      },
+      {
+        name: 'Authors',
+        value: truncate(authors, 220),
+      },
+      {
+        name: '왜 지금 볼 만한가',
+        value: digest.whyNow || buildTechPaperReason(paper),
+      },
+      {
+        name: '교육공학 적용',
+        value: digest.edTechApplication || 'AI tutor, 자동 피드백, 학습 지원 도구 설계 관점에서 검토할 수 있습니다.',
+      },
+      {
+        name: 'Learning Sciences 적용',
+        value: digest.learningSciencesApplication || '학습자-도구-환경 상호작용과 trace data 해석 관점에서 연결해 볼 수 있습니다.',
+      },
+      {
+        name: '이번 주 이슈테이킹 토픽',
+        value: digest.issueTopic || '이 기술은 학습자의 판단과 자기조절을 돕는가, 아니면 학습 과정을 과도하게 대리하는가?',
+      },
+      {
+        name: '토론 질문',
+        value: digest.discussionQuestion || 'KELS 연구 맥락에 적용한다면 가장 먼저 검증해야 할 학습 성과는 무엇일까요?',
+      },
+      {
+        name: 'Links',
+        value: `[Abstract](${paper.url})${paper.pdfUrl ? ` | [PDF](${paper.pdfUrl})` : ''}`,
+      },
+    )
+    .setFooter({ text: 'Source: arXiv. Selected from recent AI/ML/HCI tech papers for KELS research translation.' })
+    .setTimestamp(new Date());
+}
+
+export function buildMonthlyRadarEmbed({ posts, deadlines, monthLabel }) {
+  const grouped = groupPosts(posts);
+  const topTags = countTopTags(posts).slice(0, 8);
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Monthly Research Radar: ${monthLabel}`)
+    .setDescription('지난 한 달 KELS 채널에서 수집된 채용, CFP, 세미나, 리소스 흐름입니다.')
+    .setColor(0x0f766e)
+    .setTimestamp(new Date());
+
+  for (const key of ['jobs', 'cfp', 'seminars', 'resources', 'events']) {
+    const items = grouped[key] ?? [];
+    embed.addFields({
+      name: `${CATEGORY_LABELS[key] ?? key} (${items.length})`,
+      value: items.length ? items.slice(0, 4).map(lineFor).join('\n').slice(0, 1000) : 'No indexed items.',
+    });
+  }
+
+  embed.addFields(
+    {
+      name: 'Upcoming deadlines',
+      value: deadlines.length ? deadlines.slice(0, 6).map(deadlineLine).join('\n').slice(0, 1000) : 'No upcoming deadlines found.',
+    },
+    {
+      name: 'Frequent tags',
+      value: topTags.length ? topTags.map(([tag, count]) => `#${tag} (${count})`).join(', ') : 'No tags yet.',
+    },
+  );
+
+  return embed;
+}
+
+export function buildDeadlineReminderEmbed(reminders, daysUntil) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Deadline Reminder: D-${daysUntil}`)
+    .setDescription(`${daysUntil} day(s) left for these indexed KELS opportunities.`)
+    .setColor(daysUntil <= 2 ? 0xdc2626 : 0xb45309)
+    .addFields({
+      name: 'Upcoming',
+      value: reminders.slice(0, 10).map(deadlineLine).join('\n').slice(0, 1000),
+    })
+    .setTimestamp(new Date());
+}
+
+export function buildEventReminderEmbed(events) {
+  return new EmbedBuilder()
+    .setTitle('KELS Event Reminder: 1 hour left')
+    .setDescription('Announcement에 올라온 이벤트가 곧 시작합니다.')
+    .setColor(0xb45309)
+    .addFields({
+      name: 'Upcoming',
+      value: events.slice(0, 8).map(eventReminderLine).join('\n').slice(0, 1000),
+    })
+    .setTimestamp(new Date());
+}
+
+export function buildHelpEmbed() {
+  return new EmbedBuilder()
+    .setTitle('KELS Curator Bot')
+    .setDescription('Find jobs, CFPs, seminars, resources, and personalized research-community alerts.')
+    .setColor(0x1d4ed8)
+    .addFields(
+      {
+        name: 'For members',
+        value: [
+          '`/digest category:jobs days:14`',
+          '`/deadlines days:60 category:cfp`',
+          '`/search query:"learning analytics" category:all`',
+          '`/watch action:add keyword:"assistant professor"`',
+          '`/watch action:list`',
+          '`/submit-cfp title:... deadline:... url:...`',
+        ].join('\n'),
+      },
+      {
+        name: 'For moderators',
+        value: [
+          '`/backfill channel:#job_academic limit:100`',
+          '`/post-digest category:all days:7 channel:#newsletter`',
+          '`/stats`',
+        ].join('\n'),
+      },
+    );
+}
+
+function deadlineLine(deadline) {
+  const post = deadline.post;
+  const tagText = post.tags?.length ? ` | ${post.tags.slice(0, 2).map((tag) => `#${tag}`).join(' ')}` : '';
+  return `- **${deadline.iso}** [#${post.channelName}](${postUrl(post)}) ${truncate(post.content, 120)}${tagText}`;
+}
+
+function eventReminderLine(event) {
+  const post = event.post;
+  const localTime = formatEventTime(event.startsAt, event.timeZone);
+  return `- **${localTime}** [#${post.channelName}](${postUrl(post)}) ${truncate(post.content, 130)}`;
+}
+
+export function formatWatchList(keywords) {
+  if (!keywords.length) return 'Your watchlist is empty. Add one with `/watch action:add keyword:<term>`.';
+  return `Watching: ${keywords.map((keyword) => `\`${keyword}\``).join(', ')}`;
+}
+
+export function formatTopicList(topics) {
+  if (!topics.length) return 'Your KELS profile is empty. Add one with `/profile action:add topic:<term>`.';
+  return `Profile topics: ${topics.map((topic) => `\`${topic}\``).join(', ')}`;
+}
+
+export function buildCfpContent({ title, deadline, url, notes, userMention }) {
+  const noteLine = notes ? `\nNotes: ${notes}` : '';
+  return [
+    `**${title}**`,
+    `Deadline: ${deadline}`,
+    `URL: ${url}${noteLine}`,
+    `Submitted by ${userMention}`,
+  ].join('\n');
+}
+
+export function formatStats(stats) {
+  const categoryLines = Object.entries(stats.byCategory)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, count]) => `- ${category}: ${count}`)
+    .join('\n') || '- none: 0';
+  const channelLines = Object.entries(stats.byChannel)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([channel, count]) => `- #${channel}: ${count}`)
+    .join('\n') || '- none: 0';
+
+  return [
+    `Indexed posts: ${stats.total}`,
+    `Newest: ${stats.newest ?? 'n/a'}`,
+    `Oldest: ${stats.oldest ?? 'n/a'}`,
+    '',
+    'Categories:',
+    categoryLines,
+    '',
+    'Top channels:',
+    channelLines,
+  ].join('\n');
+}
+
+export function formatHealth(health) {
+  const permissionLines = Object.entries(health.permissions)
+    .map(([name, ok]) => `- ${name}: ${ok ? 'ok' : 'missing'}`)
+    .join('\n');
+  const channelLines = health.configuredChannels.length
+    ? health.configuredChannels.map((channel) => `- ${channel}`).join('\n')
+    : '- all visible public channels';
+
+  return [
+    `Bot: ${health.botTag}`,
+    `Guild: ${health.guildName}`,
+    `Current channel: #${health.channelName}`,
+    `Archive posts: ${health.stats.total}`,
+    `Newest indexed post: ${health.stats.newest ?? 'n/a'}`,
+    `Auto-backfill: ${health.autoBackfillOnReady ? `on, limit ${health.autoBackfillLimit}` : 'off'}`,
+    '',
+    'Current-channel permissions:',
+    permissionLines,
+    '',
+    'Configured index channels:',
+    channelLines,
+  ].join('\n');
+}
+
+function groupPosts(posts) {
+  const groups = {};
+  for (const post of posts) {
+    const key = mapCategory(post.category);
+    groups[key] ??= [];
+    groups[key].push(post);
+  }
+  return groups;
+}
+
+function articleSummaryFields(qwenSummary) {
+  if (!qwenSummary) {
+    return [
+      {
+        name: 'KELS 읽기 가이드',
+        value: 'Qwen 요약을 사용할 수 없어 OpenAlex 초록 미리보기만 표시합니다. 아래 초록에서 문제의식, 방법론, KELS 적용 가능성을 중심으로 읽어보세요.',
+      },
+    ];
+  }
+  return [
+    {
+      name: '이 논문이 던지는 문제',
+      value: qwenSummary.problem || 'Qwen summary unavailable.',
+    },
+    {
+      name: '핵심 기여',
+      value: qwenSummary.contribution || 'Qwen summary unavailable.',
+    },
+    {
+      name: '방법론 포인트',
+      value: qwenSummary.method || 'Qwen summary unavailable.',
+    },
+    {
+      name: 'KELS 연구 적용 아이디어',
+      value: qwenSummary.kelsApplication || 'Qwen summary unavailable.',
+    },
+    {
+      name: '읽으면서 볼 쟁점',
+      value: qwenSummary.readingLens || qwenSummary.issueTopic || 'Qwen summary unavailable.',
+    },
+    {
+      name: '이번 주 이슈테이킹 토픽',
+      value: qwenSummary.issueTopic || 'Qwen summary unavailable.',
+    },
+    {
+      name: '토론 질문',
+      value: qwenSummary.questions?.length
+        ? qwenSummary.questions.map((question) => `- ${question}`).join('\n')
+        : 'Qwen questions unavailable.',
+    },
+  ];
+}
+
+function splitSentences(text = '') {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function countTopTags(posts) {
+  const counts = new Map();
+  for (const post of posts) {
+    for (const tag of post.tags ?? []) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+}
+
+function formatEventTime(startsAt, timeZone = 'America/Los_Angeles') {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      month: 'short',
+      day: '2-digit',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZoneName: 'short',
+    }).format(new Date(startsAt));
+  } catch {
+    return startsAt;
+  }
+}

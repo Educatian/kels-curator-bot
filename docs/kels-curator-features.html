@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KELS Curator Bot 기능 안내</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5f6b7a;
+      --line: #d8dee8;
+      --panel: #ffffff;
+      --band: #f5f7fb;
+      --accent: #1d4ed8;
+      --green: #047857;
+      --orange: #b45309;
+      --red: #dc2626;
+      --shadow: 0 10px 28px rgba(25, 35, 55, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--band);
+      line-height: 1.55;
+    }
+
+    header {
+      background: #111827;
+      color: #fff;
+      padding: 40px 28px 34px;
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: #bfdbfe;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 860px;
+      margin: 16px 0 0;
+      color: #dbeafe;
+      font-size: 17px;
+    }
+
+    main { padding: 28px 0 56px; }
+    section { margin: 28px 0; }
+    h2 { margin: 0 0 14px; font-size: 25px; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: 0; }
+
+    .status, .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .status {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: -10px;
+    }
+
+    .card, .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat { min-height: 94px; }
+    .stat strong { display: block; font-size: 26px; line-height: 1.1; color: var(--accent); }
+    .stat span { display: block; margin-top: 8px; color: var(--muted); font-size: 14px; }
+    .card p { margin: 0 0 12px; color: var(--muted); }
+
+    code {
+      display: inline-block;
+      max-width: 100%;
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+      overflow-wrap: anywhere;
+    }
+
+    .cmd {
+      margin-top: 10px;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .cmd code { background: transparent; padding: 0; color: #0f172a; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      margin: 0 0 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      background: #e0f2fe;
+      color: #075985;
+    }
+
+    .tag.member { background: #dcfce7; color: #166534; }
+    .tag.admin { background: #fef3c7; color: #92400e; }
+    .tag.public { background: #ede9fe; color: #5b21b6; }
+
+    .list { margin: 10px 0 0; padding-left: 20px; }
+    .list li { margin: 6px 0; color: var(--muted); }
+
+    .channels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    footer {
+      padding: 28px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .status, .grid { grid-template-columns: 1fr; }
+      header { padding: 32px 20px 28px; }
+      .wrap { width: min(100% - 28px, 1120px); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="eyebrow">KELS Discord</p>
+      <h1>KELS Curator Bot 기능 안내</h1>
+      <p>
+        KELS Curator Bot은 KELS 디스코드의 채용, CFP/RFP, 세미나, 학술 자료, 추천 논문을
+        자동으로 모으고 검색할 수 있게 도와주는 커뮤니티 큐레이터 봇입니다.
+        일반 slash command 응답은 기본적으로 실행한 사람에게만 보입니다.
+      </p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="status" aria-label="current status">
+      <div class="stat"><strong>14</strong><span>등록된 slash commands</span></div>
+      <div class="stat"><strong>Private</strong><span>일반 slash command 응답 범위</span></div>
+      <div class="stat"><strong>Qwen</strong><span>로컬 무료 LLM 기반 보강</span></div>
+      <div class="stat"><strong>OpenAlex</strong><span>주간 추천 논문 자동 게시</span></div>
+    </section>
+
+    <section>
+      <h2>회원용 명령</h2>
+      <div class="grid">
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/digest</h3>
+          <p>최근 올라온 채용, CFP, 세미나, 리소스, 이벤트를 카테고리별로 요약합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/digest category:all days:7</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/deadlines</h3>
+          <p>게시글에서 추출한 날짜를 기준으로 다가오는 마감을 보여줍니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/deadlines days:60 category:cfp</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/search</h3>
+          <p>인덱싱된 KELS 게시글을 키워드, 주제, 기관명, 링크 단서로 검색합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/search query:"learning analytics" category:all</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/ask-kels</h3>
+          <p>로컬 archive에서 관련 글을 찾고, Qwen이 근거 링크를 바탕으로 답변합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/ask-kels query:"최근 AIED 관련 CFP 뭐 있어?"</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/cfp-helper</h3>
+          <p>CFP/RFP 링크나 공고 텍스트를 넣으면 scope, 마감, KELS fit, 준비 체크리스트를 정리합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/cfp-helper text:"https://..."</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/topic-digest</h3>
+          <p>AIED, CSCL, learning analytics 같은 주제로 최근 archive를 따로 요약합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/topic-digest topic:"AI ethics" days:30</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/watch</h3>
+          <p>정확한 키워드를 등록하면 새 글이 올라올 때 개인 DM 알림을 받을 수 있습니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/watch action:add keyword:"assistant professor"</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag member">Member</span>
+          <h3>/profile</h3>
+          <p>관심 연구 주제를 저장하면 관련 글이 올라왔을 때 왜 맞는지 설명과 함께 DM을 받을 수 있습니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 사람에게만 보입니다.</p>
+          <div class="cmd"><code>/profile action:add topic:"AI ethics"</code></div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>공개 자동 게시</h2>
+      <div class="grid">
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>주간 추천 페이퍼</h3>
+          <p>
+            OpenAlex에서 JLS, IJCSCL, ETR&amp;D, Instructional Science, Cognition and Instruction을 확인해
+            매주 한 편만 <code>#academic-resources</code>에 공개 게시합니다.
+          </p>
+          <p>Qwen이 핵심 주장, 방법론, KELS 회원에게 유용한 이유, 토론 질문을 덧붙입니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>KELS Tech Signal</h3>
+          <p>
+            최근 arXiv AI/ML/HCI tech paper 중 한 편을 골라 <code>#academic-resources</code>에 공개 게시합니다.
+          </p>
+          <p>Qwen이 왜 지금 볼 만한지, 교육공학 적용, Learning Sciences 적용, 이슈테이킹 토픽을 정리합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>월간 Research Radar</h3>
+          <p>매월 1일 <code>#newsletter</code>에 지난 한 달의 채용, CFP, 세미나, 리소스, 주요 태그, 다가오는 마감을 요약합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>마감 리마인더</h3>
+          <p>D-14, D-7, D-2에 해당하는 인덱싱된 마감을 <code>#cfp-rfp</code>에 공개 리마인드합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>이벤트 1시간 전 리마인더</h3>
+          <p><code>#announcement</code>에 올라온 시간 포함 이벤트를 확인해, 시작 1시간 전에 <code>@everyone</code>으로 다시 알립니다.</p>
+          <p>이미 시작 시간이 지난 이벤트와 시간 정보가 없는 공고는 자동 제외합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>자동 인덱싱</h3>
+          <p>설정된 공개 채널과 포럼의 새 메시지를 저장해 검색, digest, deadline, Q&amp;A에 활용합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>자기소개 온보딩 스레드</h3>
+          <p><code>#introduction</code>에 자기소개가 올라오면 본문에서 full name을 추출해 <code>Full Name 님</code> 형식의 스레드를 만들고 follow-up 질문을 답합니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag public">Public</span>
+          <h3>스팸 자동 삭제</h3>
+          <p>무료 Nitro, 초대 링크 도배, 과도한 URL/멘션, 반복 도배 같은 명백한 스팸은 자동 삭제합니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>운영자 보조 기능</h2>
+      <div class="grid">
+        <article class="card">
+          <span class="tag admin">Moderator</span>
+          <h3>/backfill</h3>
+          <p>기존 채널이나 포럼의 최근 게시글을 수동으로 인덱싱합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 운영자에게만 보입니다.</p>
+          <div class="cmd"><code>/backfill channel:#job_academic limit:100</code></div>
+        </article>
+
+        <article class="card">
+          <span class="tag admin">Moderator</span>
+          <h3>/stats, /health</h3>
+          <p>archive 상태, 권한, 인덱싱 채널, 봇 런타임 상태를 점검합니다.</p>
+          <p><strong>공개 범위:</strong> 실행한 운영자에게만 보입니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag admin">Moderator</span>
+          <h3>포럼 제목/태그 제안</h3>
+          <p>새 포럼 글이 올라오면 Qwen이 자연스러운 제목과 태그 후보를 운영자 DM으로 제안합니다.</p>
+          <p>봇이 공개 글 제목을 자동으로 바꾸지는 않습니다.</p>
+        </article>
+
+        <article class="card">
+          <span class="tag admin">Moderator</span>
+          <h3>자동 role 태깅</h3>
+          <p>회원의 공개 대화 내용을 바탕으로 관심분야 role을 추론합니다. 기존 role을 우선 사용하고, 없으면 <code>KELS:</code> prefix의 새 role을 만들 수 있습니다.</p>
+          <p><strong>안전장치:</strong> Admin &amp; Facilitator, CommunicationOfficer, admin/communication 계열 role은 자동 생성/부여되지 않습니다.</p>
+          <p>현재 role이 없던 회원 61명에게는 <code>KELS:OnboardingNeeded</code> role이 적용되었습니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>인덱싱 대상 채널</h2>
+      <p>현재 봇은 다음 KELS 채널과 포럼을 중심으로 게시글을 인덱싱합니다.</p>
+      <div class="channels">
+        <span class="tag">#job_academic</span>
+        <span class="tag">#job_practitioner</span>
+        <span class="tag">#cfp-rfp</span>
+        <span class="tag">#seminar-resource</span>
+        <span class="tag">#academic-resources</span>
+        <span class="tag">#study_workshop_bootcamp</span>
+        <span class="tag">#conferencepresentations</span>
+        <span class="tag">#newsletter</span>
+        <span class="tag">#announcement</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>추가하면 좋은 기능 후보</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>1. 온보딩 질문 자동화</h3>
+          <p>새 회원이 자기소개를 하면 관심 분야, 소속, 역할을 요약해 추천 채널과 role 후보를 안내합니다.</p>
+        </article>
+        <article class="card">
+          <h3>2. CFP 제출 도우미</h3>
+          <p>CFP 링크를 넣으면 scope, deadline, fit, 준비 체크리스트를 Qwen이 요약합니다.</p>
+        </article>
+        <article class="card">
+          <h3>3. 주제별 미니 digest</h3>
+          <p>AIED, CSCL, LA, ID/LXD 등 관심 분야별로 한 달치 게시글을 따로 요약합니다.</p>
+        </article>
+        <article class="card">
+          <h3>4. 운영자 승인 큐</h3>
+          <p>자동 role 태깅, 새 role 생성, 포럼 태그 제안을 한 곳에서 승인/거절할 수 있게 합니다.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      KELS Curator Bot v0.1.0 · 일반 slash command 응답은 개인에게만 보이며, 자동 추천/리마인더는 지정 채널에 공개 게시됩니다.
+    </div>
+  </footer>
+</body>
+</html>

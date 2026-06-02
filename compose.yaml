@@ -1,0 +1,9 @@
+services:
+  kels-curator-bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data

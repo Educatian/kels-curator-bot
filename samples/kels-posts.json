@@ -1,0 +1,26 @@
+[
+  {
+    "channelName": "job_academic",
+    "authorName": "sample",
+    "content": "[University of Example] Assistant Professor in Learning Analytics. Review begins November 15, 2026. https://example.edu/jobs/la-professor",
+    "createdAt": "2026-06-01T12:00:00.000Z"
+  },
+  {
+    "channelName": "cfp-rfp",
+    "authorName": "sample",
+    "content": "Special issue CFP: AI-supported education and learning sciences. Proposal deadline: November 30, 2026. https://example.org/cfp/ai-learning-sciences",
+    "createdAt": "2026-06-01T13:00:00.000Z"
+  },
+  {
+    "channelName": "seminar-resource",
+    "authorName": "sample",
+    "content": "KELS Workshop recording: Semi-Automating Your CV/Personal Website with GitHub and Codex. https://youtu.be/example",
+    "createdAt": "2026-06-01T14:00:00.000Z"
+  },
+  {
+    "channelName": "academic-resources",
+    "authorName": "sample",
+    "content": "Codex to Courseware Project draft and reusable template for instructional design workflows.",
+    "createdAt": "2026-06-01T15:00:00.000Z"
+  }
+]

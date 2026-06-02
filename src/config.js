@@ -1,0 +1,96 @@
+import path from 'node:path';
+import process from 'node:process';
+
+function required(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function splitList(value) {
+  return (value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function bool(value) {
+  return /^(1|true|yes|on)$/i.test(value ?? '');
+}
+
+function intEnv(name, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const raw = process.env[name] ?? String(fallback);
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`Invalid ${name}: expected integer ${min}-${max}, got "${raw}"`);
+  }
+  return value;
+}
+
+export function loadConfig() {
+  return {
+    discordToken: required('DISCORD_TOKEN'),
+    clientId: required('DISCORD_CLIENT_ID'),
+    guildId: required('DISCORD_GUILD_ID'),
+    digestChannelId: process.env.DIGEST_CHANNEL_ID ?? '',
+    digestHourLocal: intEnv('DIGEST_CRON_HOUR_LOCAL', 9, { min: 0, max: 23 }),
+    digestTimeZone: process.env.DIGEST_TIME_ZONE ?? 'America/Los_Angeles',
+    indexChannels: splitList(process.env.INDEX_CHANNELS),
+    autoBackfillOnReady: bool(process.env.AUTO_BACKFILL_ON_READY),
+    autoBackfillForce: bool(process.env.AUTO_BACKFILL_FORCE),
+    autoBackfillLimit: intEnv('AUTO_BACKFILL_LIMIT', 50, { min: 1, max: 100 }),
+    articleDigestEnabled: bool(process.env.ARTICLE_DIGEST_ENABLED),
+    articleDigestChannelId: process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    articleDigestHourLocal: intEnv('ARTICLE_DIGEST_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    articleDigestLookbackDays: intEnv('ARTICLE_DIGEST_LOOKBACK_DAYS', 365, { min: 30, max: 1825 }),
+    techSignalEnabled: bool(process.env.TECH_SIGNAL_ENABLED),
+    techSignalChannelId: process.env.TECH_SIGNAL_CHANNEL_ID ?? process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    techSignalWeekday: process.env.TECH_SIGNAL_WEEKDAY ?? 'Wed',
+    techSignalHourLocal: intEnv('TECH_SIGNAL_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    techSignalLookbackDays: intEnv('TECH_SIGNAL_LOOKBACK_DAYS', 14, { min: 1, max: 60 }),
+    techSignalQuery: process.env.TECH_SIGNAL_QUERY ?? '',
+    monthlyRadarEnabled: bool(process.env.MONTHLY_RADAR_ENABLED),
+    monthlyRadarChannelId: process.env.MONTHLY_RADAR_CHANNEL_ID ?? '',
+    monthlyRadarHourLocal: intEnv('MONTHLY_RADAR_HOUR_LOCAL', 9, { min: 0, max: 23 }),
+    deadlineReminderEnabled: bool(process.env.DEADLINE_REMINDER_ENABLED),
+    deadlineReminderChannelId: process.env.DEADLINE_REMINDER_CHANNEL_ID ?? '',
+    deadlineReminderHourLocal: intEnv('DEADLINE_REMINDER_HOUR_LOCAL', 9, { min: 0, max: 23 }),
+    deadlineReminderDays: splitList(process.env.DEADLINE_REMINDER_DAYS || '14,7,2').map((day) => {
+      const value = Number.parseInt(day, 10);
+      if (!Number.isInteger(value) || value < 1 || value > 365) {
+        throw new Error(`Invalid DEADLINE_REMINDER_DAYS value: "${day}"`);
+      }
+      return value;
+    }),
+    eventReminderEnabled: bool(process.env.EVENT_REMINDER_ENABLED),
+    eventReminderSourceChannels: splitList(process.env.EVENT_REMINDER_SOURCE_CHANNELS || 'announcement'),
+    eventReminderChannelId: process.env.EVENT_REMINDER_CHANNEL_ID ?? process.env.DEADLINE_REMINDER_CHANNEL_ID ?? '',
+    eventReminderLookaheadMinutes: intEnv('EVENT_REMINDER_LOOKAHEAD_MINUTES', 60, { min: 15, max: 240 }),
+    eventReminderPollMinutes: intEnv('EVENT_REMINDER_POLL_MINUTES', 10, { min: 1, max: 60 }),
+    forumSuggestionEnabled: bool(process.env.FORUM_SUGGESTION_ENABLED),
+    moderatorUserIds: splitList(process.env.MODERATOR_USER_IDS),
+    qwenEnabled: bool(process.env.QWEN_ENABLED),
+    qwenModel: process.env.QWEN_MODEL ?? 'qwen2.5-coder:7b',
+    qwenBaseUrl: process.env.QWEN_BASE_URL ?? 'http://127.0.0.1:11434',
+    qwenTimeoutMs: intEnv('QWEN_TIMEOUT_MS', 60000, { min: 1000, max: 120000 }),
+    chatbotLoggingEnabled: bool(process.env.KELS_CHATBOT_LOGGING_ENABLED),
+    logWebhookUrl: process.env.KELS_LOG_WEBHOOK_URL ?? '',
+    logWebhookToken: process.env.KELS_LOG_WEBHOOK_TOKEN ?? '',
+    roleAutoTaggingEnabled: bool(process.env.ROLE_AUTO_TAGGING_ENABLED),
+    roleAutoCreateEnabled: bool(process.env.ROLE_AUTO_CREATE_ENABLED),
+    roleAutoAssignEnabled: bool(process.env.ROLE_AUTO_ASSIGN_ENABLED),
+    roleMinConfidence: Number.parseFloat(process.env.ROLE_MIN_CONFIDENCE ?? '0.72'),
+    roleMaxPerMember: intEnv('ROLE_MAX_PER_MEMBER', 3, { min: 1, max: 8 }),
+    rolePrefix: process.env.ROLE_PREFIX ?? 'KELS:',
+    roleIgnoreNames: splitList(process.env.ROLE_IGNORE_NAMES || '@everyone,KELS,Admin & Facilitator,CommunicationOfficer'),
+    onboardingEnabled: bool(process.env.ONBOARDING_ENABLED),
+    onboardingChannelId: process.env.ONBOARDING_CHANNEL_ID ?? '',
+    spamAutoDeleteEnabled: bool(process.env.SPAM_AUTO_DELETE_ENABLED),
+    spamMaxUrls: intEnv('SPAM_MAX_URLS', 4, { min: 1, max: 20 }),
+    spamMaxMentions: intEnv('SPAM_MAX_MENTIONS', 8, { min: 1, max: 100 }),
+    openAlexMailto: process.env.OPENALEX_MAILTO ?? '',
+    dataDir: path.resolve(process.env.DATA_DIR ?? './data'),
+  };
+}

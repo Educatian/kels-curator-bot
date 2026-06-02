@@ -1,0 +1,8 @@
+name = "kels-bot-logs"
+main = "src/worker.js"
+compatibility_date = "2026-06-02"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kels_bot_logs"
+database_id = "65c15e4a-86d8-4e87-a491-eaaef2f025d0"
