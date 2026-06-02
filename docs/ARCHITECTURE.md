@@ -25,6 +25,7 @@ flowchart TD
     OpenAlex["OpenAlex connector<br/>src/openalex.js"]
     Arxiv["arXiv connector<br/>src/arxiv.js"]
     GitHub["GitHub repo connector<br/>src/github-repos.js"]
+    KnowledgeFlow["Knowledge Flow<br/>src/knowledge-flow.js"]
     Relevance["Archive relevance<br/>src/relevance.js"]
     Logger["Logger<br/>src/logger.js"]
   end
@@ -44,6 +45,7 @@ flowchart TD
   Client --> OpenAlex
   Client --> Arxiv
   Client --> GitHub
+  Client --> KnowledgeFlow
   Client --> Relevance
   Client --> Format
   Format --> SchedulesOut
@@ -141,10 +143,17 @@ This module owns:
 - deadline embeds
 - article recommendation embeds
 - KELS Tech Signal embeds
+- Monthly Knowledge Flow embeds
 - event reminder embeds
 - help, stats, and health text
 
-The weekly article format now uses a deep `KELS reading guide` structure rather than a surface-level three-line summary.
+The weekly article and Tech Signal formats now include participation prompts so members have a low-friction way to respond, connect the item to their own work, or name a limitation.
+
+### `src/knowledge-flow.js`
+
+Builds monthly community-flow signals from indexed posts.
+
+It extracts topic signals, category/channel counts, cross-channel knowledge bridges, evidence posts, and participation nudges. This turns the monthly scheduled post into a lightweight community learning-analytics artifact rather than a simple digest.
 
 ### `src/qwen.js`
 

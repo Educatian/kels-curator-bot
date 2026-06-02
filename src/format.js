@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { buildTechPaperReason } from './arxiv.js';
 import { buildGithubRepoReason } from './github-repos.js';
+import { buildKnowledgeFlow, buildParticipationNudge } from './knowledge-flow.js';
 import { buildRecommendationReason } from './openalex.js';
 import { mapCategory } from './storage.js';
 
@@ -126,6 +127,14 @@ export function buildArticleRecommendationEmbed(article, qwenSummary = null) {
         name: 'Link',
         value: article.url,
       },
+      {
+        name: '참여 프롬프트',
+        value: buildParticipationNudge({
+          title: article.title,
+          issueTopic: qwenSummary?.issueTopic,
+          kind: 'recommended article',
+        }),
+      },
     )
     .setFooter({ text: 'Source: OpenAlex. Journal pool: JLS, IJCSCL, ETR&D, Instructional Science, Cognition and Instruction.' })
     .setTimestamp(new Date());
@@ -179,6 +188,14 @@ export function buildTechSignalEmbed(paper, qwenDigest = null) {
         name: 'Links',
         value: `[Abstract](${paper.url})${paper.pdfUrl ? ` | [PDF](${paper.pdfUrl})` : ''}`,
       },
+      {
+        name: '참여 프롬프트',
+        value: buildParticipationNudge({
+          title: paper.title,
+          issueTopic: digest.issueTopic,
+          kind: 'tech signal',
+        }),
+      },
     )
     .setFooter({ text: 'Source: arXiv. Selected from recent AI/ML/HCI tech papers for KELS research translation.' })
     .setTimestamp(new Date());
@@ -225,19 +242,53 @@ function buildGithubTechSignalEmbed(repo, qwenDigest = null) {
         name: 'Link',
         value: repo.url,
       },
+      {
+        name: '참여 프롬프트',
+        value: buildParticipationNudge({
+          title: repo.title,
+          issueTopic: digest.issueTopic,
+          kind: 'tech signal',
+        }),
+      },
     )
     .setFooter({ text: 'Source: GitHub. Selected against recent arXiv papers as this week’s stronger KELS tech signal.' })
     .setTimestamp(new Date());
 }
 
-export function buildMonthlyRadarEmbed({ posts, deadlines, monthLabel }) {
+export function buildMonthlyRadarEmbed({ posts, deadlines, monthLabel, knowledgeFlow = null }) {
   const grouped = groupPosts(posts);
   const topTags = countTopTags(posts).slice(0, 8);
+  const flow = knowledgeFlow ?? buildKnowledgeFlow(posts);
   const embed = new EmbedBuilder()
-    .setTitle(`KELS Monthly Research Radar: ${monthLabel}`)
-    .setDescription('지난 한 달 KELS 채널에서 수집된 채용, CFP, 세미나, 리소스 흐름입니다.')
+    .setTitle(`KELS Monthly Knowledge Flow: ${monthLabel}`)
+    .setDescription('지난 한 달 KELS 채널에서 형성된 주제 흐름, 연결 가능성, 참여 포인트입니다.')
     .setColor(0x0f766e)
     .setTimestamp(new Date());
+
+  embed.addFields(
+    {
+      name: 'Community pulse',
+      value: flow.categoryCounts.length
+        ? flow.categoryCounts.slice(0, 6).map((item) => `${item.name} ${item.count}`).join(' | ')
+        : 'No indexed activity this month.',
+    },
+    {
+      name: 'Emerging topics',
+      value: flow.topics.length ? flow.topics.slice(0, 8).map(topicFlowLine).join('\n').slice(0, 1000) : 'No topic signals yet.',
+    },
+    {
+      name: 'Knowledge bridges',
+      value: flow.bridgeOpportunities.length
+        ? flow.bridgeOpportunities.map((item) => `- ${item.prompt}`).join('\n').slice(0, 1000)
+        : 'No cross-channel bridges detected yet.',
+    },
+    {
+      name: 'Participation nudges',
+      value: flow.participationPrompts.length
+        ? flow.participationPrompts.map((item) => `- ${item}`).join('\n').slice(0, 1000)
+        : '이번 달에는 관심 주제 하나를 골라 thread에서 적용 가능성을 남겨보세요.',
+    },
+  );
 
   for (const key of ['jobs', 'cfp', 'seminars', 'resources', 'events']) {
     const items = grouped[key] ?? [];
@@ -256,9 +307,20 @@ export function buildMonthlyRadarEmbed({ posts, deadlines, monthLabel }) {
       name: 'Frequent tags',
       value: topTags.length ? topTags.map(([tag, count]) => `#${tag} (${count})`).join(', ') : 'No tags yet.',
     },
+    {
+      name: 'Evidence trail',
+      value: flow.evidencePosts.length
+        ? flow.evidencePosts.slice(0, 5).map((item) => `- #${item.topic} ${lineFor(item.post)}`).join('\n').slice(0, 1000)
+        : 'No evidence posts yet.',
+    },
   );
 
   return embed;
+}
+
+function topicFlowLine(topic) {
+  const channels = topic.channels.slice(0, 2).map((channel) => `#${channel}`).join(', ');
+  return `- #${topic.topic} (${topic.count}) ${channels}`;
 }
 
 export function buildDeadlineReminderEmbed(reminders, daysUntil) {

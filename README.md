@@ -14,10 +14,10 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 
 - **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, and `/topic-digest`.
 - **Public weekly article recommendation** from OpenAlex, limited to JLS, IJCSCL, ETR&D, Instructional Science, and Cognition and Instruction.
-- **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, and discussion questions.
-- **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, and discussion.
+- **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, discussion questions, and a participation prompt.
+- **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
-- **Monthly research radar** and deadline reminders for indexed posts.
+- **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
 - **Personal watchlists and profiles** for keyword and interest-topic DM alerts.
 - **KELS Archive Q&A** powered by local Qwen/Ollama when enabled, with source links, channel/date evidence, relevance scores, related originals, and weak-evidence warnings.
 - **Self-introduction onboarding** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with personalized prompts.
@@ -62,6 +62,7 @@ src/
   openalex.js     OpenAlex article recommendation source
   arxiv.js        arXiv Tech Signal source
   github-repos.js GitHub repository Tech Signal source
+  knowledge-flow.js Monthly topic flow and participation analysis
   relevance.js    Archive relevance and evidence ranking
   moderation.js   Spam detection
   logger.js       Local and optional Cloudflare logging
@@ -98,6 +99,7 @@ npm.cmd run doctor
 npm.cmd run setup:check
 npm.cmd run channels:list
 npm.cmd run channels:verify
+npm.cmd run knowledge-flow:demo
 npm.cmd run article:demo
 npm.cmd run tech-signal:demo
 ```
@@ -125,7 +127,7 @@ The main configuration groups are:
 - `INDEX_CHANNELS`: public channels/forums to archive.
 - `ARTICLE_DIGEST_*`: weekly OpenAlex article recommendation.
 - `TECH_SIGNAL_*`: weekly arXiv-vs-GitHub tech signal.
-- `MONTHLY_RADAR_*`: monthly public community summary.
+- `MONTHLY_RADAR_*`: monthly public Knowledge Flow summary.
 - `DEADLINE_REMINDER_*`: D-14/D-7/D-2 deadline reminders.
 - `EVENT_REMINDER_*`: `@everyone` one-hour reminders, D-1 reminders, event links, and follow-up threads for timed announcement events.
 - `QWEN_*`: local Ollama/Qwen enhancement.

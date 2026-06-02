@@ -8,6 +8,7 @@ Run a no-token demo before connecting Discord:
 npm.cmd install
 npm.cmd run seed:demo
 npm.cmd run digest:demo
+npm.cmd run knowledge-flow:demo
 ```
 
 This seeds `data/posts.json` from `samples/kels-posts.json` and renders the Discord embed payload to the terminal.
@@ -77,7 +78,7 @@ Data persists in `./data`.
 6. Run `/health`.
 7. Run `/post-digest category:all days:7 channel:#newsletter`.
 8. Announce `/watch action:add keyword:<topic>` to members.
-9. For public curation checks, run `npm.cmd run article:demo` and `npm.cmd run tech-signal:demo`.
+9. For public curation checks, run `npm.cmd run knowledge-flow:demo`, `npm.cmd run article:demo`, and `npm.cmd run tech-signal:demo`.
 10. For event automation, confirm `announcement` is in `INDEX_CHANNELS` and that event posts include date, time, and timezone.
 
 ## Privacy Defaults

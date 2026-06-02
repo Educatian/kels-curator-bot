@@ -1013,7 +1013,8 @@ function scheduleMonthlyRadar() {
       const channel = await client.channels.fetch(config.monthlyRadarChannelId).catch(() => null);
       if (!channel?.isTextBased?.()) return;
 
-      const posts = await store.getPosts({ category: 'all', days: 31 });
+      const posts = (await store.getPosts({ category: 'all', days: 31 }))
+        .filter((post) => !post.guildId || post.guildId === config.guildId);
       const deadlines = await store.getUpcomingDeadlines({ days: 60, category: 'all' });
       await channel.send({
         embeds: [buildMonthlyRadarEmbed({ posts, deadlines, monthLabel: now.date.slice(0, 7) })],
