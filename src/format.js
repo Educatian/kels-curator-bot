@@ -70,6 +70,51 @@ export function buildSearchEmbed(posts, query, category = 'all') {
   return embed;
 }
 
+export function buildFieldExplorerEmbed({ query, topics = [], relatedPosts = [], label = 'Field Explorer', enabled = true }) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Field Map: ${truncate(query, 80)}`)
+    .setColor(0x0f766e)
+    .setTimestamp(new Date());
+
+  if (!enabled) {
+    return embed.setDescription('Field Explorer is not enabled yet. Ask an organizer to configure `FIELD_EXPLORER_TOPICS_FILE`.');
+  }
+
+  embed.setDescription(
+    topics.length
+      ? `Top field-map positions from ${label}. This is a lightweight positioning aid, not a formal classification.`
+      : `No strong field-map topic match found in ${label}. Try a more specific topic, abstract, method, or construct name.`,
+  );
+
+  if (topics.length) {
+    embed.addFields({
+      name: 'Field positions',
+      value: topics.map((topic, index) => [
+        `**${index + 1}. T${topic.id} ${truncate(topic.name, 70)}**`,
+        `score ${topic.score}, n=${topic.count}`,
+        topic.keywords?.length ? `keywords: ${topic.keywords.slice(0, 6).join(', ')}` : '',
+      ].filter(Boolean).join('\n')).join('\n\n').slice(0, 1000),
+    });
+  }
+
+  if (relatedPosts.length) {
+    embed.addFields({
+      name: 'Related KELS originals',
+      value: relatedPosts.slice(0, 5).map(lineFor).join('\n').slice(0, 1000),
+    });
+  }
+
+  embed.addFields({
+    name: 'How to use this',
+    value: [
+      'Use this to locate a topic, abstract, CFP, or project idea within a research-field map.',
+      'For stronger results, paste 2-5 sentences with constructs, method, population, and technology context.',
+    ].join('\n'),
+  });
+
+  return embed;
+}
+
 export function buildDeadlinesEmbed(deadlines, { days = 60, category = 'all' } = {}) {
   const embed = new EmbedBuilder()
     .setTitle(`KELS Deadlines: ${CATEGORY_LABELS[category] ?? category}`)
@@ -458,6 +503,7 @@ export function formatHealth(health) {
     `Archive posts: ${health.stats.total}`,
     `Newest indexed post: ${health.stats.newest ?? 'n/a'}`,
     `Auto-backfill: ${health.autoBackfillOnReady ? `on, limit ${health.autoBackfillLimit}` : 'off'}`,
+    `Field Explorer: ${health.fieldExplorerEnabled ? `on, cached topics ${health.fieldExplorerTopicCount}` : 'off'}`,
     '',
     'Current-channel permissions:',
     permissionLines,

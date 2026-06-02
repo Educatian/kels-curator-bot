@@ -130,6 +130,23 @@ export function buildCommands() {
           .setMaxValue(365),
       ),
     new SlashCommandBuilder()
+      .setName('field-map')
+      .setDescription('Position a topic or abstract in the connected Field Explorer map.')
+      .addStringOption((option) =>
+        option
+          .setName('query')
+          .setDescription('Topic, CFP, project idea, or abstract to position')
+          .setRequired(true),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many days of KELS archive posts to connect')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
+      ),
+    new SlashCommandBuilder()
       .setName('submit-cfp')
       .setDescription('Create a clean CFP/RFP entry for the archive.')
       .addStringOption((option) =>

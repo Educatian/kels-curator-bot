@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ChannelType, REST, Routes } from 'discord.js';
 import { buildCommands } from '../src/commands.js';
 import { loadConfig } from '../src/config.js';
+import { loadFieldExplorerTopics } from '../src/field-explorer.js';
 import { resolveReactionTarget } from '../src/reactions.js';
 import { JsonStore } from '../src/storage.js';
 
@@ -76,6 +77,14 @@ if (config) {
     const missing = config.autoReactEmojis.filter((token) => !resolveReactionTarget(token, emojis));
     if (missing.length) throw new Error(`unresolved reaction token(s): ${missing.join(', ')}`);
     return `enabled: ${config.autoReactEmojis.join(', ')}`;
+  });
+
+  await check('Field Explorer topics configured', async () => {
+    if (!config.fieldExplorerEnabled) return 'disabled';
+    if (!config.fieldExplorerTopicsFile) throw new Error('FIELD_EXPLORER_TOPICS_FILE is empty');
+    const topics = await loadFieldExplorerTopics(config.fieldExplorerTopicsFile);
+    if (!topics.length) throw new Error('no non-outlier topics loaded');
+    return `${topics.length} topic(s) loaded from ${config.fieldExplorerTopicsFile}`;
   });
 }
 

@@ -25,6 +25,9 @@ describe('config', () => {
     expect(config.articleDigestLookbackDays).toBe(365);
     expect(config.techSignalGithubEnabled).toBe(true);
     expect(config.techSignalGithubMinStars).toBe(100);
+    expect(config.fieldExplorerEnabled).toBe(false);
+    expect(config.fieldExplorerTopicsFile).toBe('');
+    expect(config.fieldExplorerLabel).toBe('Field Explorer');
     expect(config.monthlyRadarEnabled).toBe(false);
     expect(config.monthlyRadarHourLocal).toBe(9);
     expect(config.deadlineReminderEnabled).toBe(false);

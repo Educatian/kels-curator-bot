@@ -12,6 +12,7 @@ describe('slash commands', () => {
       'ask-kels',
       'cfp-helper',
       'topic-digest',
+      'field-map',
       'submit-cfp',
       'backfill',
       'stats',

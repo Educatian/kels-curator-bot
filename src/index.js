@@ -18,6 +18,7 @@ import {
   buildHelpEmbed,
   buildArticleRecommendationEmbed,
   buildEventReminderEmbed,
+  buildFieldExplorerEmbed,
   buildMonthlyRadarEmbed,
   buildTechSignalEmbed,
   buildSearchEmbed,
@@ -26,6 +27,7 @@ import {
   formatStats,
   formatWatchList,
 } from './format.js';
+import { loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
 import { createChatLogger } from './logger.js';
@@ -66,6 +68,7 @@ const store = new JsonStore(config.dataDir);
 const qwen = createQwenClient(config);
 const chatLogger = createChatLogger(config, store);
 let autoReactionTargetCache = { guildId: '', tokenKey: '', expiresAt: 0, targets: [] };
+let fieldExplorerTopicCache = { filePath: '', loadedAt: 0, topics: [] };
 
 const client = new Client({
   intents: [
@@ -199,6 +202,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'field-map') {
+    await interaction.deferReply({ ephemeral: true });
+    const query = interaction.options.getString('query', true);
+    const days = interaction.options.getInteger('days') ?? 180;
+    const result = await handleFieldMap(query, days);
+    await chatLogger.log({
+      eventType: 'field-map',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'field-map',
+      query,
+      responseExcerpt: result.topics.map((topic) => `T${topic.id} ${topic.name}`).join('; '),
+      metadata: { days, matchedTopics: result.topics.length, relatedPosts: result.relatedPosts.length },
+    });
+    await interaction.editReply({
+      embeds: [buildFieldExplorerEmbed({
+        query,
+        topics: result.topics,
+        relatedPosts: result.relatedPosts,
+        label: config.fieldExplorerLabel,
+        enabled: result.enabled,
+      })],
+    });
+    return;
+  }
+
   if (interaction.commandName === 'submit-cfp') {
     const title = interaction.options.getString('title', true);
     const deadline = interaction.options.getString('deadline', true);
@@ -298,6 +330,8 @@ async function buildRuntimeHealth(interaction) {
     stats,
     autoBackfillOnReady: config.autoBackfillOnReady,
     autoBackfillLimit: config.autoBackfillLimit,
+    fieldExplorerEnabled: config.fieldExplorerEnabled,
+    fieldExplorerTopicCount: fieldExplorerTopicCache.topics.length,
     configuredChannels: config.indexChannels,
     permissions: {
       ViewChannel: Boolean(permissions?.has(PermissionFlagsBits.ViewChannel)),
@@ -307,6 +341,38 @@ async function buildRuntimeHealth(interaction) {
       ReadMessageHistory: Boolean(permissions?.has(PermissionFlagsBits.ReadMessageHistory)),
     },
   };
+}
+
+async function handleFieldMap(query, days) {
+  const topics = await getFieldExplorerTopics();
+  const rankedTopics = rankFieldTopics(query, topics, { limit: 5 });
+  const posts = await store.getPosts({ category: 'all', days });
+  const relatedPosts = rankPostsForQuery(query, posts, { limit: 5 })
+    .filter((post) => post.relevance > 0);
+  return {
+    enabled: config.fieldExplorerEnabled && Boolean(config.fieldExplorerTopicsFile),
+    topics: rankedTopics,
+    relatedPosts,
+  };
+}
+
+async function getFieldExplorerTopics() {
+  if (!config.fieldExplorerEnabled || !config.fieldExplorerTopicsFile) return [];
+  const now = Date.now();
+  if (
+    fieldExplorerTopicCache.filePath === config.fieldExplorerTopicsFile
+    && fieldExplorerTopicCache.loadedAt > now - 10 * 60 * 1000
+  ) {
+    return fieldExplorerTopicCache.topics;
+  }
+
+  const topics = await loadFieldExplorerTopics(config.fieldExplorerTopicsFile);
+  fieldExplorerTopicCache = {
+    filePath: config.fieldExplorerTopicsFile,
+    loadedAt: now,
+    topics,
+  };
+  return topics;
 }
 
 async function indexMessage(message) {
