@@ -59,6 +59,7 @@ export function loadConfig() {
     fieldExplorerEnabled: bool(process.env.FIELD_EXPLORER_ENABLED),
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
+    fieldExplorerAppUrl: process.env.FIELD_EXPLORER_APP_URL ?? '',
     monthlyRadarEnabled: bool(process.env.MONTHLY_RADAR_ENABLED),
     monthlyRadarChannelId: process.env.MONTHLY_RADAR_CHANNEL_ID ?? '',
     monthlyRadarHourLocal: intEnv('MONTHLY_RADAR_HOUR_LOCAL', 9, { min: 0, max: 23 }),

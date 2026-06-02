@@ -16,7 +16,7 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **Public weekly article recommendation** from OpenAlex, limited to JLS, IJCSCL, ETR&D, Instructional Science, and Cognition and Instruction.
 - **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, discussion questions, and a participation prompt.
 - **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
-- **FieldExplorer bridge** that positions a topic, abstract, CFP, or project idea against a connected journal/conference/category network map, then links it back to related KELS archive originals.
+- **FieldExplorer 1.0 bridge** that positions a topic, abstract, CFP, or project idea against the latest `Educatian/fieldexplorer1.0` venue/category map, links to the public app, and connects results back to related KELS archive originals.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
 - **Automatic community reactions** that add the KELS custom emoji and a like emoji to indexed member posts and thread replies.
@@ -133,7 +133,7 @@ The main configuration groups are:
 - `AUTO_REACT_*`: automatic KELS and like reactions for indexed member posts and thread replies.
 - `ARTICLE_DIGEST_*`: weekly OpenAlex article recommendation.
 - `TECH_SIGNAL_*`: weekly arXiv-vs-GitHub tech signal.
-- `FIELD_EXPLORER_*`: optional `/field-map` integration with the FieldExplorer `index.tsx` network data or a `Name,Type,Category` CSV export.
+- `FIELD_EXPLORER_*`: optional `/field-map` integration with the latest FieldExplorer 1.0 `src/data/venues.json`, older embedded `index.tsx` network data, `Name,Type,Category` CSV exports, or BERTopic topic CSV files.
 - `MONTHLY_RADAR_*`: monthly public Knowledge Flow summary.
 - `DEADLINE_REMINDER_*`: D-14/D-7/D-2 deadline reminders.
 - `EVENT_REMINDER_*`: `@everyone` one-hour reminders, D-1 reminders, event links, and follow-up threads for timed announcement events.

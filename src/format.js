@@ -70,7 +70,14 @@ export function buildSearchEmbed(posts, query, category = 'all') {
   return embed;
 }
 
-export function buildFieldExplorerEmbed({ query, topics = [], relatedPosts = [], label = 'Field Explorer', enabled = true }) {
+export function buildFieldExplorerEmbed({
+  query,
+  topics = [],
+  relatedPosts = [],
+  label = 'Field Explorer',
+  appUrl = '',
+  enabled = true,
+}) {
   const embed = new EmbedBuilder()
     .setTitle(`KELS Field Map: ${truncate(query, 80)}`)
     .setColor(0x0f766e)
@@ -85,6 +92,13 @@ export function buildFieldExplorerEmbed({ query, topics = [], relatedPosts = [],
       ? `Closest field positions from ${label}. This is a lightweight navigation aid, not a formal classification.`
       : `No strong FieldExplorer match found in ${label}. Try a journal, conference, field category, method, or project keyword.`,
   );
+
+  if (appUrl) {
+    embed.addFields({
+      name: 'FieldExplorer app',
+      value: `[Open the latest FieldExplorer map](${appUrl})`,
+    });
+  }
 
   if (topics.length) {
     embed.addFields({

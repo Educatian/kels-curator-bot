@@ -12,6 +12,9 @@ export async function loadFieldExplorerTopics(filePath) {
 }
 
 export function parseFieldExplorerFile(text) {
+  const venueTopics = parseFieldExplorerVenuesJson(text);
+  if (venueTopics.length) return venueTopics;
+
   const embeddedCsv = extractEmbeddedCsvData(text);
   const source = embeddedCsv || text;
   const records = parseCsv(source.replace(/^\uFEFF/, ''));
@@ -23,6 +26,66 @@ export function parseFieldExplorerFile(text) {
     return parseFieldExplorerTopics(source);
   }
   return [];
+}
+
+export function parseFieldExplorerVenuesJson(jsonText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(jsonText ?? '').replace(/^\uFEFF/, ''));
+  } catch {
+    return [];
+  }
+
+  const venues = Array.isArray(parsed) ? parsed : parsed?.venues;
+  if (!Array.isArray(venues)) return [];
+
+  const categoryMap = new Map();
+  for (const venue of venues) {
+    const name = String(venue?.name ?? '').trim();
+    const type = String(venue?.type ?? '').trim();
+    const categories = Array.isArray(venue?.categories) ? venue.categories : [];
+    if (!name || !type || !categories.length) continue;
+
+    for (const rawCategory of categories) {
+      const category = String(rawCategory ?? '').trim();
+      if (!category) continue;
+
+      const item = categoryMap.get(category) ?? {
+        id: category,
+        count: 0,
+        name: category,
+        rawName: category,
+        sourceType: 'fieldexplorer-venues-json',
+        keywords: [],
+        journals: [],
+        conferences: [],
+        organizations: [],
+        representativePreview: '',
+      };
+
+      const deadline = String(venue.cfpDeadline ?? '').trim();
+      const displayName = deadline && (type === 'Conference' || type === 'SubConference')
+        ? `${name} (CFP: ${deadline})`
+        : name;
+      item.count += 1;
+      if (type === 'Journal') item.journals.push(name);
+      else if (type === 'Conference' || type === 'SubConference') item.conferences.push(displayName);
+      else if (type === 'Organization') item.organizations.push(name);
+      item.keywords.push(name, type, category, venue.impact, deadline);
+      categoryMap.set(category, item);
+    }
+  }
+
+  return [...categoryMap.values()]
+    .map((item) => ({
+      ...item,
+      keywords: [...new Set(item.keywords.filter(Boolean))].slice(0, 28),
+      journals: [...new Set(item.journals)].sort(),
+      conferences: [...new Set(item.conferences)].sort(),
+      organizations: [...new Set(item.organizations)].sort(),
+      representativePreview: fieldExplorerPreview(item),
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 export function parseFieldExplorerTopics(csvText) {

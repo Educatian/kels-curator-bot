@@ -225,6 +225,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         topics: result.topics,
         relatedPosts: result.relatedPosts,
         label: config.fieldExplorerLabel,
+        appUrl: config.fieldExplorerAppUrl,
         enabled: result.enabled,
       })],
     });

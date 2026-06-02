@@ -3,6 +3,7 @@ import {
   parseFieldExplorerFile,
   parseFieldExplorerNetworkCsv,
   parseFieldExplorerTopics,
+  parseFieldExplorerVenuesJson,
   rankFieldTopics,
   tokenize,
 } from '../src/field-explorer.js';
@@ -19,6 +20,30 @@ LAK Conference,Conference,Learning Analytics
 Journal of Learning Analytics,Journal,Learning Analytics
 AIED Conference,Conference,AIED
 International Journal of Artificial Intelligence in Education,Journal,AIED`;
+
+const VENUES_JSON = JSON.stringify([
+  {
+    id: 'jls',
+    name: 'Journal of the Learning Sciences',
+    type: 'Journal',
+    categories: ['Well-known', 'Learning Sciences'],
+    impact: 'Q1',
+  },
+  {
+    id: 'lak',
+    name: 'LAK Conference',
+    type: 'Conference',
+    categories: ['Learning Analytics'],
+    cfpDeadline: 'October',
+  },
+  {
+    id: 'aied',
+    name: 'AIED Conference',
+    type: 'Conference',
+    categories: ['AIED'],
+    cfpDeadline: 'February',
+  },
+]);
 
 describe('field explorer helpers', () => {
   it('parses field explorer topic CSV and excludes outliers', () => {
@@ -66,5 +91,23 @@ describe('field explorer helpers', () => {
     const ranked = rankFieldTopics('AIED journal and conference', fields);
     expect(ranked[0].name).toBe('AIED');
     expect(ranked[0].conferences).toEqual(['AIED Conference']);
+  });
+
+  it('parses FieldExplorer 1.0 venues.json into field categories', () => {
+    const fields = parseFieldExplorerVenuesJson(VENUES_JSON);
+    const learningAnalytics = fields.find((field) => field.name === 'Learning Analytics');
+    expect(fields).toHaveLength(4);
+    expect(learningAnalytics).toMatchObject({
+      id: 'Learning Analytics',
+      count: 1,
+      conferences: ['LAK Conference (CFP: October)'],
+      sourceType: 'fieldexplorer-venues-json',
+    });
+  });
+
+  it('detects FieldExplorer 1.0 venues.json through the generic parser', () => {
+    const fields = parseFieldExplorerFile(VENUES_JSON);
+    const ranked = rankFieldTopics('AIED conference artificial intelligence education', fields);
+    expect(ranked[0].name).toBe('AIED');
   });
 });

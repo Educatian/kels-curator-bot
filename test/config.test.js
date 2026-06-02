@@ -28,6 +28,7 @@ describe('config', () => {
     expect(config.fieldExplorerEnabled).toBe(false);
     expect(config.fieldExplorerTopicsFile).toBe('');
     expect(config.fieldExplorerLabel).toBe('Field Explorer');
+    expect(config.fieldExplorerAppUrl).toBe('');
     expect(config.monthlyRadarEnabled).toBe(false);
     expect(config.monthlyRadarHourLocal).toBe(9);
     expect(config.deadlineReminderEnabled).toBe(false);
