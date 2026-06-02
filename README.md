@@ -18,6 +18,7 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
+- **Automatic community reactions** that add the KELS custom emoji and a like emoji to indexed member posts and thread replies.
 - **Personal watchlists and profiles** for keyword and interest-topic DM alerts, plus recent related KELS originals that connect the member’s interests to the archive.
 - **KELS Archive Q&A** powered by local Qwen/Ollama when enabled, with source links, channel/date evidence, relevance scores, related originals, and weak-evidence warnings.
 - **Personalized onboarding pathway** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with related originals, participation targets, first-comment drafts, and a one-week follow-up.
@@ -81,7 +82,7 @@ test/             Vitest unit tests
 2. Enable Message Content Intent if you want automatic message indexing.
 3. Invite the bot with:
    - Scopes: `bot`, `applications.commands`
-   - Permissions: read messages, send messages, create public threads, manage messages, use slash commands
+   - Permissions: read messages, send messages, create public threads, send in threads, manage messages, add reactions, use slash commands
 4. Copy `.env.example` to `.env` and fill in the required values:
    - `DISCORD_TOKEN`
    - `DISCORD_CLIENT_ID`
@@ -127,6 +128,7 @@ The main configuration groups are:
 
 - `DISCORD_*`: bot identity and target guild.
 - `INDEX_CHANNELS`: public channels/forums to archive.
+- `AUTO_REACT_*`: automatic KELS and like reactions for indexed member posts and thread replies.
 - `ARTICLE_DIGEST_*`: weekly OpenAlex article recommendation.
 - `TECH_SIGNAL_*`: weekly arXiv-vs-GitHub tech signal.
 - `MONTHLY_RADAR_*`: monthly public Knowledge Flow summary.

@@ -38,6 +38,8 @@ export function loadConfig() {
     digestHourLocal: intEnv('DIGEST_CRON_HOUR_LOCAL', 9, { min: 0, max: 23 }),
     digestTimeZone: process.env.DIGEST_TIME_ZONE ?? 'America/Los_Angeles',
     indexChannels: splitList(process.env.INDEX_CHANNELS),
+    autoReactEnabled: bool(process.env.AUTO_REACT_ENABLED),
+    autoReactEmojis: splitList(process.env.AUTO_REACT_EMOJIS || 'KELS,👍'),
     autoBackfillOnReady: bool(process.env.AUTO_BACKFILL_ON_READY),
     autoBackfillForce: bool(process.env.AUTO_BACKFILL_FORCE),
     autoBackfillLimit: intEnv('AUTO_BACKFILL_LIMIT', 50, { min: 1, max: 100 }),

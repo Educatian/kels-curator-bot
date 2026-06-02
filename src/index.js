@@ -58,12 +58,14 @@ import {
   relatedOriginals,
   scoreCandidateAgainstArchive,
 } from './relevance.js';
+import { resolveReactionTargets } from './reactions.js';
 import { JsonStore } from './storage.js';
 
 const config = loadConfig();
 const store = new JsonStore(config.dataDir);
 const qwen = createQwenClient(config);
 const chatLogger = createChatLogger(config, store);
+let autoReactionTargetCache = { guildId: '', tokenKey: '', expiresAt: 0, targets: [] };
 
 const client = new Client({
   intents: [
@@ -96,6 +98,7 @@ client.on(Events.MessageCreate, async (message) => {
   try {
     if (await deleteSpamIfNeeded(message)) return;
     if (!shouldIndexMessage(message)) return;
+    await addAutoReactions(message);
     const post = await indexMessage(message);
     await handleOnboardingIntro(post, message);
     await notifyWatchers(post, message);
@@ -299,6 +302,7 @@ async function buildRuntimeHealth(interaction) {
     permissions: {
       ViewChannel: Boolean(permissions?.has(PermissionFlagsBits.ViewChannel)),
       SendMessages: Boolean(permissions?.has(PermissionFlagsBits.SendMessages)),
+      AddReactions: Boolean(permissions?.has(PermissionFlagsBits.AddReactions)),
       EmbedLinks: Boolean(permissions?.has(PermissionFlagsBits.EmbedLinks)),
       ReadMessageHistory: Boolean(permissions?.has(PermissionFlagsBits.ReadMessageHistory)),
     },
@@ -343,6 +347,40 @@ async function deleteSpamIfNeeded(message) {
   });
   console.log(`Deleted spam message ${message.id}: ${reason}`);
   return true;
+}
+
+async function addAutoReactions(message) {
+  if (!config.autoReactEnabled) return;
+  if (!message.guild || message.author?.bot) return;
+
+  const targets = await getAutoReactionTargets(message.guild);
+  for (const target of targets) {
+    await message.react(target).catch((error) => {
+      console.warn(`Failed to add auto reaction "${target}" to message ${message.id}: ${error.message}`);
+    });
+  }
+}
+
+async function getAutoReactionTargets(guild) {
+  const tokenKey = config.autoReactEmojis.join(',');
+  const now = Date.now();
+  if (
+    autoReactionTargetCache.guildId === guild.id
+    && autoReactionTargetCache.tokenKey === tokenKey
+    && autoReactionTargetCache.expiresAt > now
+  ) {
+    return autoReactionTargetCache.targets;
+  }
+
+  const emojis = await guild.emojis.fetch().catch(() => guild.emojis.cache);
+  const targets = resolveReactionTargets(config.autoReactEmojis, emojis);
+  autoReactionTargetCache = {
+    guildId: guild.id,
+    tokenKey,
+    expiresAt: now + 10 * 60 * 1000,
+    targets,
+  };
+  return targets;
 }
 
 function shouldIndexMessage(message) {

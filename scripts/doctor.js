@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ChannelType, REST, Routes } from 'discord.js';
 import { buildCommands } from '../src/commands.js';
 import { loadConfig } from '../src/config.js';
+import { resolveReactionTarget } from '../src/reactions.js';
 import { JsonStore } from '../src/storage.js';
 
 const checks = [];
@@ -67,6 +68,14 @@ if (config) {
     ));
     if (missing.length) throw new Error(`missing: ${missing.join(', ')}`);
     return `${config.indexChannels.length} configured channel(s) matched`;
+  });
+
+  await check('auto reactions configured', async () => {
+    if (!config.autoReactEnabled) return 'disabled';
+    const emojis = await rest.get(Routes.guildEmojis(config.guildId));
+    const missing = config.autoReactEmojis.filter((token) => !resolveReactionTarget(token, emojis));
+    if (missing.length) throw new Error(`unresolved reaction token(s): ${missing.join(', ')}`);
+    return `enabled: ${config.autoReactEmojis.join(', ')}`;
   });
 }
 

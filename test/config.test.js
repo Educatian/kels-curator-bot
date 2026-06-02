@@ -17,6 +17,8 @@ describe('config', () => {
     const config = loadConfig();
     expect(config.autoBackfillLimit).toBe(50);
     expect(config.autoBackfillForce).toBe(false);
+    expect(config.autoReactEnabled).toBe(false);
+    expect(config.autoReactEmojis).toEqual(['KELS', '👍']);
     expect(config.digestHourLocal).toBe(9);
     expect(config.articleDigestEnabled).toBe(false);
     expect(config.articleDigestHourLocal).toBe(10);

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { PermissionFlagsBits } from 'discord.js';
 
 const clientId = process.env.DISCORD_CLIENT_ID;
 if (!clientId) {
@@ -7,12 +8,15 @@ if (!clientId) {
 }
 
 const permissions = [
-  1024n, // ViewChannel
-  2048n, // SendMessages
-  16384n, // EmbedLinks
-  65536n, // ReadMessageHistory
-  274877906944n, // SendMessagesInThreads
-].reduce((sum, value) => sum + value, 0n);
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.SendMessagesInThreads,
+  PermissionFlagsBits.CreatePublicThreads,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.AddReactions,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.ReadMessageHistory,
+].reduce((sum, value) => sum | value, 0n);
 
 const params = new URLSearchParams({
   client_id: clientId,
