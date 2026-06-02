@@ -30,6 +30,11 @@ import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
 import { createChatLogger } from './logger.js';
 import { detectSpam } from './moderation.js';
+import {
+  buildOnboardingFollowupMessage,
+  buildOnboardingPathway,
+  formatOnboardingPathway,
+} from './onboarding-pathway.js';
 import { fetchCandidateArticles, selectWeeklyArticle } from './openalex.js';
 import {
   answerArchiveQuestionWithQwen,
@@ -79,6 +84,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleDeadlineReminders();
   scheduleEventReminders();
   scheduleRolelessReminders();
+  scheduleOnboardingFollowups();
   if (config.autoBackfillOnReady) {
     await autoBackfillConfiguredChannels(readyClient).catch((error) => {
       console.error('Auto-backfill failed', error);
@@ -576,11 +582,19 @@ async function handleOnboardingIntro(post, message) {
     displayName: fullName,
     introText: post.content,
   });
-  const connectionSuggestions = await memberConnectionSuggestions(profile.interests);
-  const onboardingReply = formatOnboardingReply(reply, profile, connectionSuggestions);
+  const pathway = await memberOnboardingPathway(profile);
+  const onboardingReply = formatOnboardingReply(reply, profile, pathway);
   await thread.send(truncateDiscord(onboardingReply, 1800)).catch(() => null);
   handled.add(message.id);
   await store.setStateValue('onboardingMessageIds', Array.from(handled).slice(-1000));
+  await queueOnboardingFollowup({
+    userId: post.authorId,
+    threadId: thread.id,
+    messageId: message.id,
+    fullName,
+    interests: pathway?.interests ?? profile.interests ?? [],
+    createdAt: new Date().toISOString(),
+  });
   await chatLogger.log({
     eventType: 'onboarding-thread',
     guildId: post.guildId,
@@ -596,12 +610,12 @@ async function handleOnboardingIntro(post, message) {
       extractedFullName: extracted.fullName,
       confidence: extracted.confidence,
       profile,
-      connectionSuggestions,
+      pathway,
     },
   });
 }
 
-function formatOnboardingReply(reply, profile, connectionSuggestions = null) {
+function formatOnboardingReply(reply, profile, pathway = null) {
   const lines = [reply];
   if (profile?.interests?.length) lines.push('', `관심분야: ${profile.interests.join(', ')}`);
   if (profile?.affiliation || profile?.stage) {
@@ -614,10 +628,8 @@ function formatOnboardingReply(reply, profile, connectionSuggestions = null) {
   if (profile?.recommendedCommands?.length) {
     lines.push(`추천 slash: ${profile.recommendedCommands.map((command) => `\`${command}\``).join(' ')}`);
   }
-  const connectionText = formatConnectionSuggestions(connectionSuggestions, {
-    emptyText: '아직 자기소개 관심사와 강하게 연결되는 최근 원문은 적지만, 앞으로 관련 글이 올라오면 개인 알림과 추천으로 이어집니다.',
-  });
-  if (connectionText) lines.push(connectionText);
+  const pathwayText = formatOnboardingPathway(pathway);
+  if (pathwayText) lines.push(pathwayText);
   return lines.filter(Boolean).join('\n');
 }
 
@@ -627,6 +639,26 @@ async function memberConnectionSuggestions(topics) {
   const posts = (await store.getPosts({ category: 'all', days: 180 }))
     .filter((post) => !post.guildId || post.guildId === config.guildId);
   return buildConnectionSuggestions({ topics: cleanTopics, posts, limit: 3 });
+}
+
+async function memberOnboardingPathway(profile) {
+  const posts = (await store.getPosts({ category: 'all', days: 180 }))
+    .filter((post) => !post.guildId || post.guildId === config.guildId);
+  return buildOnboardingPathway({ profile, posts, limit: 3 });
+}
+
+async function queueOnboardingFollowup(item) {
+  if (!config.onboardingFollowupEnabled) return;
+  const state = await store.getState();
+  const queue = state.onboardingFollowupQueue ?? [];
+  const key = `${item.userId}:${item.messageId}`;
+  if (queue.some((entry) => `${entry.userId}:${entry.messageId}` === key)) return;
+  queue.push({
+    ...item,
+    dueAt: daysFromIso(item.createdAt, config.onboardingFollowupAfterDays),
+    sentAt: null,
+  });
+  await store.setStateValue('onboardingFollowupQueue', queue.slice(-1000));
 }
 
 function onboardingThreadName(fullName) {
@@ -1205,6 +1237,59 @@ function scheduleRolelessReminders() {
   }, 60 * 60 * 1000);
 }
 
+function scheduleOnboardingFollowups() {
+  if (!config.onboardingFollowupEnabled) return;
+  setInterval(async () => {
+    try {
+      const state = await store.getState();
+      const queue = state.onboardingFollowupQueue ?? [];
+      const now = new Date();
+      let changed = false;
+
+      for (const item of queue) {
+        if (item.sentAt || item.failedAt) continue;
+        if (!item.dueAt || new Date(item.dueAt) > now) continue;
+
+        const pathway = await memberOnboardingPathway({ interests: item.interests ?? [] });
+        const message = buildOnboardingFollowupMessage(item, pathway);
+        const sent = await sendOnboardingFollowup(item.threadId, message);
+        if (sent) {
+          item.sentAt = now.toISOString();
+          changed = true;
+          await chatLogger.log({
+            eventType: 'onboarding-followup',
+            guildId: config.guildId,
+            channelId: item.threadId,
+            userId: item.userId,
+            query: (item.interests ?? []).join(', '),
+            responseExcerpt: message,
+            metadata: { threadId: item.threadId, dueAt: item.dueAt },
+          });
+        } else {
+          item.failedAt = now.toISOString();
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await store.setStateValue('onboardingFollowupQueue', queue.slice(-1000));
+      }
+    } catch (error) {
+      console.error('Failed to send onboarding follow-ups', error);
+    }
+  }, 60 * 60 * 1000);
+}
+
+async function sendOnboardingFollowup(threadId, content) {
+  const thread = await client.channels.fetch(threadId).catch(() => null);
+  if (!thread?.isTextBased?.()) return false;
+  const sent = await thread.send(truncateDiscord(content, 1800)).catch((error) => {
+    console.warn(`Failed to send onboarding follow-up to ${threadId}: ${error.message}`);
+    return null;
+  });
+  return Boolean(sent);
+}
+
 async function findEventReminderChannel(guild, event) {
   if (config.eventReminderChannelId) {
     const configured = await client.channels.fetch(config.eventReminderChannelId).catch(() => null);
@@ -1328,6 +1413,12 @@ function isoDaysFromNow(days, now = new Date()) {
   const date = new Date(now);
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function daysFromIso(iso, days) {
+  const date = new Date(iso);
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
 }
 
 function sameWeekday(actual, configured) {

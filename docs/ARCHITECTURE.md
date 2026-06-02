@@ -28,6 +28,7 @@ flowchart TD
     GitHub["GitHub repo connector<br/>src/github-repos.js"]
     KnowledgeFlow["Knowledge Flow<br/>src/knowledge-flow.js"]
     Relevance["Archive relevance<br/>src/relevance.js"]
+    OnboardingPathway["Onboarding pathway<br/>src/onboarding-pathway.js"]
     Logger["Logger<br/>src/logger.js"]
   end
 
@@ -49,6 +50,7 @@ flowchart TD
   Client --> GitHub
   Client --> KnowledgeFlow
   Client --> Relevance
+  Client --> OnboardingPathway
   Client --> Format
   Format --> SchedulesOut
   Format --> DMs
@@ -162,6 +164,12 @@ The weekly article and Tech Signal formats now include participation prompts so 
 Builds monthly community-flow signals from indexed posts.
 
 It extracts topic signals, category/channel counts, cross-channel knowledge bridges, evidence posts, and participation nudges. This turns the monthly scheduled post into a lightweight community learning-analytics artifact rather than a simple digest.
+
+### `src/onboarding-pathway.js`
+
+Builds the personalized onboarding intervention.
+
+It combines extracted member interests with recent archive evidence to return related originals, participation targets, first-comment drafts, and a one-week follow-up message. This frames onboarding as adaptive community-participation scaffolding rather than a static welcome reply.
 
 ### `src/qwen.js`
 

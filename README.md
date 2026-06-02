@@ -20,7 +20,7 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.
 - **Personal watchlists and profiles** for keyword and interest-topic DM alerts, plus recent related KELS originals that connect the member’s interests to the archive.
 - **KELS Archive Q&A** powered by local Qwen/Ollama when enabled, with source links, channel/date evidence, relevance scores, related originals, and weak-evidence warnings.
-- **Self-introduction onboarding** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with personalized prompts.
+- **Personalized onboarding pathway** that extracts the real full name, interests, affiliation/stage, and what the member is looking for, then creates a `Full Name 님` thread with related originals, participation targets, first-comment drafts, and a one-week follow-up.
 - **Role-tagging assistance** with confidence thresholds, moderator review for ambiguous matches, and hard blocks for admin and communication-officer roles.
 - **Spam cleanup** for obvious invite floods, free-Nitro scams, excessive URLs, excessive mentions, and repeated-message bursts.
 - **Optional Cloudflare Worker/D1 logging** for bot interaction logs.
@@ -67,6 +67,7 @@ src/
   relevance.js    Archive relevance and evidence ranking
   moderation.js   Spam detection
   logger.js       Local and optional Cloudflare logging
+  onboarding-pathway.js Personalized onboarding intervention logic
 
 scripts/          Setup, diagnostics, one-shot posting, role utilities
 docs/             Feature guide and architecture documentation
@@ -133,7 +134,7 @@ The main configuration groups are:
 - `EVENT_REMINDER_*`: `@everyone` one-hour reminders, D-1 reminders, event links, and follow-up threads for timed announcement events.
 - `QWEN_*`: local Ollama/Qwen enhancement.
 - `ROLE_*`: role-tagging behavior and safeguards.
-- `ONBOARDING_*`: self-introduction thread automation.
+- `ONBOARDING_*`: self-introduction pathway automation and one-week follow-up.
 - `SPAM_*`: automatic spam deletion thresholds.
 - `KELS_LOG_*`: optional Cloudflare logging endpoint.
 

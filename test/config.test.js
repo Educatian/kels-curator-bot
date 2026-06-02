@@ -42,6 +42,8 @@ describe('config', () => {
     expect(config.roleAutoCreateConfidence).toBe(0.94);
     expect(config.onboardingEnabled).toBe(false);
     expect(config.onboardingChannelId).toBe('');
+    expect(config.onboardingFollowupEnabled).toBe(true);
+    expect(config.onboardingFollowupAfterDays).toBe(7);
     expect(config.rolelessReminderEnabled).toBe(false);
     expect(config.rolelessReminderAfterDays).toBe(7);
     expect(config.spamAutoDeleteEnabled).toBe(false);

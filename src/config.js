@@ -95,6 +95,8 @@ export function loadConfig() {
     roleIgnoreNames: splitList(process.env.ROLE_IGNORE_NAMES || '@everyone,KELS,Admin & Facilitator,CommunicationOfficer'),
     onboardingEnabled: bool(process.env.ONBOARDING_ENABLED),
     onboardingChannelId: process.env.ONBOARDING_CHANNEL_ID ?? '',
+    onboardingFollowupEnabled: process.env.ONBOARDING_FOLLOWUP_ENABLED === undefined ? true : bool(process.env.ONBOARDING_FOLLOWUP_ENABLED),
+    onboardingFollowupAfterDays: intEnv('ONBOARDING_FOLLOWUP_AFTER_DAYS', 7, { min: 1, max: 60 }),
     rolelessReminderEnabled: bool(process.env.ROLELESS_REMINDER_ENABLED),
     rolelessReminderAfterDays: intEnv('ROLELESS_REMINDER_AFTER_DAYS', 7, { min: 1, max: 365 }),
     rolelessReminderHourLocal: intEnv('ROLELESS_REMINDER_HOUR_LOCAL', 10, { min: 0, max: 23 }),
