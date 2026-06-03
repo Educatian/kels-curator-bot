@@ -357,6 +357,114 @@ export function buildFieldPulseEmbed({
   return embed;
 }
 
+export function buildCommunityGraphEmbed({ graph, days = 30 }) {
+  const summary = graph.summary;
+  return new EmbedBuilder()
+    .setTitle(`KELS Community Graph: last ${days} days`)
+    .setDescription('Activity graph summary across posts, users, slash commands, reactions, channels, and FieldExplorer topics.')
+    .setColor(0x2563eb)
+    .addFields(
+      {
+        name: 'Graph size',
+        value: `nodes ${summary.nodeCount} | edges ${summary.edgeCount}`,
+        inline: true,
+      },
+      {
+        name: 'Node types',
+        value: summary.nodeTypes.length ? summary.nodeTypes.map((item) => `${item.name}: ${item.count}`).join(' | ') : 'No nodes.',
+      },
+      {
+        name: 'Edge types',
+        value: summary.edgeTypes.length ? summary.edgeTypes.map((item) => `${item.name}: ${item.count}`).join(' | ') : 'No edges.',
+      },
+      {
+        name: 'Most connected users',
+        value: summary.topUsers.length
+          ? summary.topUsers.map((node) => `- ${node.label} (${node.weight})`).join('\n').slice(0, 1000)
+          : 'No user activity yet.',
+      },
+      {
+        name: 'Most connected topics',
+        value: summary.topTopics.length
+          ? summary.topTopics.map((node) => `- ${node.label} (${node.weight})`).join('\n').slice(0, 1000)
+          : 'No FieldExplorer topic matches yet.',
+      },
+    )
+    .setTimestamp(new Date());
+}
+
+export function buildCurationFeedbackEmbed({ feedback, days = 30 }) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Curation Feedback: last ${days} days`)
+    .setDescription('Signals from reactions, slash-command demand, and FieldExplorer topic matches. Use this to tune future curation.')
+    .setColor(0x7c3aed)
+    .addFields(
+      {
+        name: 'Command demand',
+        value: feedback.commandUsage.length
+          ? feedback.commandUsage.slice(0, 8).map((item) => `/${item.name}: ${item.count}`).join(' | ')
+          : 'No slash command usage logged yet.',
+      },
+      {
+        name: 'High-signal posts',
+        value: feedback.topPosts.length
+          ? feedback.topPosts.slice(0, 6).map((item) => [
+            `- score ${item.score} | reactions ${item.reactions} | query matches ${item.queryMatches}`,
+            lineFor(item.post).replace(/^- /, '  '),
+          ].join('\n')).join('\n').slice(0, 1000)
+          : 'No feedback-rich posts yet.',
+      },
+      {
+        name: 'Topic signals',
+        value: feedback.topicSignals.length
+          ? feedback.topicSignals.slice(0, 8).map((item) => `- ${item.topic}: score ${item.score}, posts ${item.posts}, reactions ${item.reactions}`).join('\n').slice(0, 1000)
+          : 'No topic signal yet.',
+      },
+    )
+    .setTimestamp(new Date());
+
+  if (feedback.recommendationFeedback.length) {
+    embed.addFields({
+      name: 'Recent curation posts',
+      value: feedback.recommendationFeedback.map((item) => `- ${item.eventType}: ${truncate(item.query || '', 90)}`).join('\n').slice(0, 1000),
+    });
+  }
+
+  return embed;
+}
+
+export function buildProfileSuggestionsEmbed({ suggestions, days = 90 }) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Profile Suggestions: last ${days} days`)
+    .setDescription(
+      suggestions.evidenceCount
+        ? 'These are inferred from your own posts, slash-command use, and reactions to KELS posts. Nothing is added until you choose to add it.'
+        : 'No recent personal activity signal found yet. Try reacting to posts or using `/profile action:add topic:<topic>` directly.',
+    )
+    .setColor(0x0f766e)
+    .setTimestamp(new Date());
+
+  if (suggestions.suggestions.length) {
+    embed.addFields({
+      name: 'Suggested topics',
+      value: suggestions.suggestions.map((item, index) => [
+        `**${index + 1}. ${item.topic}** | score ${item.score}`,
+        item.evidence?.length
+          ? `evidence: ${item.evidence.slice(0, 2).map((entry) => `${entry.source} in #${entry.channelName || 'unknown'}`).join(', ')}`
+          : '',
+        `add with: \`/profile action:add topic:"${truncate(item.topic, 60)}"\``,
+      ].filter(Boolean).join('\n')).join('\n\n').slice(0, 1500),
+    });
+  }
+
+  embed.addFields({
+    name: 'Privacy',
+    value: 'This is shown only to you. It is a suggestion layer, not automatic profile tagging.',
+  });
+
+  return embed;
+}
+
 export function buildDeadlinesEmbed(deadlines, { days = 60, category = 'all' } = {}) {
   const embed = new EmbedBuilder()
     .setTitle(`KELS Deadlines: ${CATEGORY_LABELS[category] ?? category}`)

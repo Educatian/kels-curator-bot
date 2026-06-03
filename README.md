@@ -19,6 +19,7 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 - **FieldExplorer 1.0 bridge** that positions a topic, abstract, CFP, or project idea against the latest `Educatian/fieldexplorer1.0` venue/category map, links to the public app, and connects results back to related KELS archive originals.
 - **Venue Scout** that turns an abstract or project idea into strong/adjacent/exploratory journal and conference lanes, with framing guidance and related KELS originals.
 - **Field Pulse** that summarizes recent KELS activity as community signals, FieldExplorer category positions, bridge opportunities, and discussion seeds.
+- **Community intelligence layer** that builds a lightweight activity graph, tracks curation feedback from reactions and slash-command demand, and suggests profile topics from member activity.
 - **Anonymous advice workflow** where members privately submit concerns, moderators approve or reject in an admin channel, and approved items are posted without author identity to a dedicated advice channel.
 - **Announcement event automation** that detects date/time/timezone plus Zoom, RSVP, and Google Form links; posts D-1 and one-hour `@everyone` reminders; and opens follow-up threads after events end.
 - **Monthly Knowledge Flow** that summarizes community pulse, emerging topics, cross-channel knowledge bridges, evidence posts, and participation nudges.

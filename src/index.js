@@ -8,6 +8,11 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from './arxiv.js';
+import {
+  buildCommunityGraph,
+  buildCurationFeedback,
+  suggestProfileTopics,
+} from './community-intelligence.js';
 import { buildConnectionSuggestions, formatConnectionSuggestions } from './connections.js';
 import { loadConfig } from './config.js';
 import {
@@ -20,12 +25,15 @@ import {
   buildAnonymousReviewClosedPayload,
   buildAnonymousReviewPayload,
   buildArticleRecommendationEmbed,
+  buildCommunityGraphEmbed,
+  buildCurationFeedbackEmbed,
   buildEventReminderEmbed,
   buildFieldExplorerEmbed,
   buildFieldPulseEmbed,
   buildMonthlyRadarEmbed,
   buildTechSignalEmbed,
   buildVenueScoutEmbed,
+  buildProfileSuggestionsEmbed,
   buildSearchEmbed,
   formatTopicList,
   formatHealth,
@@ -310,6 +318,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'profile-suggest') {
+    await interaction.deferReply({ ephemeral: true });
+    const days = interaction.options.getInteger('days') ?? 90;
+    const result = await handleProfileSuggest(interaction.user.id, days);
+    await interaction.editReply({
+      embeds: [buildProfileSuggestionsEmbed({ suggestions: result, days })],
+    });
+    return;
+  }
+
   if (interaction.commandName === 'anon-submit') {
     await interaction.deferReply({ ephemeral: true });
     const category = interaction.options.getString('category', true);
@@ -401,6 +419,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
       content: `Posted a Field Pulse with ${result.posts.length} indexed item(s) to #${displayChannelName(targetChannel)}.`,
       ephemeral: true,
     });
+    return;
+  }
+
+  if (interaction.commandName === 'community-graph') {
+    await interaction.deferReply({ ephemeral: true });
+    const days = interaction.options.getInteger('days') ?? 30;
+    const graph = await handleCommunityGraph(days);
+    await interaction.editReply({ embeds: [buildCommunityGraphEmbed({ graph, days })] });
+    return;
+  }
+
+  if (interaction.commandName === 'curation-feedback') {
+    await interaction.deferReply({ ephemeral: true });
+    const days = interaction.options.getInteger('days') ?? 30;
+    const feedback = await handleCurationFeedback(days);
+    await interaction.editReply({ embeds: [buildCurationFeedbackEmbed({ feedback, days })] });
     return;
   }
 
@@ -721,6 +755,35 @@ async function handleFieldPulse(days) {
     posts,
     fieldMatches,
   };
+}
+
+async function handleCommunityGraph(days) {
+  const posts = await store.getPosts({ category: 'all', days });
+  const logs = await store.getChatbotLogs({ days });
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildCommunityGraph({ posts, logs, fieldTopics });
+}
+
+async function handleCurationFeedback(days) {
+  const posts = await store.getPosts({ category: 'all', days });
+  const logs = await store.getChatbotLogs({ days });
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildCurationFeedback({ posts, logs, fieldTopics });
+}
+
+async function handleProfileSuggest(userId, days) {
+  const posts = await store.getPosts({ category: 'all', days });
+  const logs = await store.getChatbotLogs({ days });
+  const fieldTopics = await getFieldExplorerTopics();
+  const existingTopics = await store.listProfileTopics(userId);
+  return suggestProfileTopics({
+    userId,
+    existingTopics,
+    posts,
+    logs,
+    fieldTopics,
+    limit: 5,
+  });
 }
 
 async function getFieldExplorerTopics() {

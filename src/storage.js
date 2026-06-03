@@ -132,6 +132,16 @@ export class JsonStore {
     return log;
   }
 
+  async getChatbotLogs({ days = 30, eventType = '' } = {}) {
+    const logs = await readJson(this.chatbotLogsFile, []);
+    const minDate = cutoffIso(days);
+    return logs.filter((log) => {
+      const dateOk = !log.createdAt || log.createdAt >= minDate;
+      const eventOk = !eventType || log.eventType === eventType;
+      return dateOk && eventOk;
+    });
+  }
+
   async getStats() {
     const posts = await this.getAllPosts();
     const byCategory = {};

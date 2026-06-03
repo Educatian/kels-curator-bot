@@ -175,6 +175,17 @@ export function buildCommands() {
           .setMaxValue(60),
       ),
     new SlashCommandBuilder()
+      .setName('profile-suggest')
+      .setDescription('Suggest personal profile topics from your KELS activity.')
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days of your activity to inspect')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
+      ),
+    new SlashCommandBuilder()
       .setName('anon-submit')
       .setDescription('Submit an anonymous advice request for moderator review.')
       .addStringOption((option) =>
@@ -281,6 +292,30 @@ export function buildCommands() {
           .setName('channel')
           .setDescription('Where to post; defaults to the current channel')
           .setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('community-graph')
+      .setDescription('Summarize the KELS activity graph across users, posts, commands, reactions, and topics.')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days to include')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
+      ),
+    new SlashCommandBuilder()
+      .setName('curation-feedback')
+      .setDescription('Show feedback signals for KELS curation from reactions, slash queries, and topic matches.')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days to include')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
       ),
     new SlashCommandBuilder()
       .setName('deadlines')
