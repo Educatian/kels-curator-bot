@@ -28,12 +28,18 @@ import {
   buildCommunityGraphEmbed,
   buildCurationFeedbackEmbed,
   buildEventReminderEmbed,
+  buildBetterQuestionEmbed,
   buildFieldExplorerEmbed,
   buildFieldPulseEmbed,
+  buildLearningPathEmbed,
   buildMonthlyRadarEmbed,
+  buildPaperCoachEmbed,
+  buildPeerLearningEmbed,
+  buildReflectionEmbed,
   buildTechSignalEmbed,
   buildVenueScoutEmbed,
   buildProfileSuggestionsEmbed,
+  buildWeeklyChallengeEmbed,
   buildSearchEmbed,
   formatTopicList,
   formatHealth,
@@ -43,6 +49,14 @@ import {
 import { buildVenueScout, loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
+import {
+  buildBetterQuestion,
+  buildLearningPathway,
+  buildMicroChallenge,
+  buildPaperCoach,
+  buildPeerLearningMatch,
+  buildReflectionGuide,
+} from './learning-experience.js';
 import { createChatLogger } from './logger.js';
 import { detectSpam } from './moderation.js';
 import {
@@ -328,6 +342,50 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'learning-path') {
+    await interaction.deferReply({ ephemeral: true });
+    const stage = interaction.options.getString('stage', true);
+    const interests = interaction.options.getString('interests') ?? '';
+    const pathway = await handleLearningPath(interaction.user.id, { stage, interests });
+    await interaction.editReply({ embeds: [buildLearningPathEmbed({ pathway })] });
+    return;
+  }
+
+  if (interaction.commandName === 'weekly-challenge') {
+    await interaction.deferReply({ ephemeral: true });
+    const focus = interaction.options.getString('focus') ?? 'paper';
+    const challenge = await handleWeeklyChallenge(focus);
+    await interaction.editReply({ embeds: [buildWeeklyChallengeEmbed({ challenge })] });
+    return;
+  }
+
+  if (interaction.commandName === 'reflect') {
+    await interaction.deferReply({ ephemeral: true });
+    const item = interaction.options.getString('item', true);
+    const kind = interaction.options.getString('kind') ?? 'paper';
+    const context = interaction.options.getString('context') ?? '';
+    const guide = await handleReflectionGuide({ item, kind, context });
+    await interaction.editReply({ embeds: [buildReflectionEmbed({ guide })] });
+    return;
+  }
+
+  if (interaction.commandName === 'ask-better') {
+    await interaction.deferReply({ ephemeral: true });
+    const question = interaction.options.getString('question', true);
+    const result = await handleBetterQuestion(question);
+    await interaction.editReply({ embeds: [buildBetterQuestionEmbed({ result })] });
+    return;
+  }
+
+  if (interaction.commandName === 'paper-coach') {
+    await interaction.deferReply({ ephemeral: true });
+    const text = interaction.options.getString('text', true);
+    const level = interaction.options.getString('level') ?? 'beginner';
+    const coach = await handlePaperCoach({ text, level });
+    await interaction.editReply({ embeds: [buildPaperCoachEmbed({ coach })] });
+    return;
+  }
+
   if (interaction.commandName === 'anon-submit') {
     await interaction.deferReply({ ephemeral: true });
     const category = interaction.options.getString('category', true);
@@ -435,6 +493,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const days = interaction.options.getInteger('days') ?? 30;
     const feedback = await handleCurationFeedback(days);
     await interaction.editReply({ embeds: [buildCurationFeedbackEmbed({ feedback, days })] });
+    return;
+  }
+
+  if (interaction.commandName === 'peer-learning') {
+    await interaction.deferReply({ ephemeral: true });
+    const topic = interaction.options.getString('topic', true);
+    const days = interaction.options.getInteger('days') ?? 30;
+    const match = await handlePeerLearning({ topic, days });
+    await interaction.editReply({ embeds: [buildPeerLearningEmbed({ match, days })] });
     return;
   }
 
@@ -784,6 +851,48 @@ async function handleProfileSuggest(userId, days) {
     fieldTopics,
     limit: 5,
   });
+}
+
+async function handleLearningPath(userId, { stage, interests }) {
+  const posts = await store.getPosts({ category: 'all', days: 90 });
+  const logs = (await store.getChatbotLogs({ days: 90 })).filter((log) => log.userId === userId);
+  const fieldTopics = await getFieldExplorerTopics();
+  const profileTopics = await store.listProfileTopics(userId);
+  return buildLearningPathway({
+    stage,
+    interests: [interests, ...profileTopics].filter(Boolean).join(' '),
+    posts,
+    logs,
+    fieldTopics,
+  });
+}
+
+async function handleWeeklyChallenge(focus) {
+  const posts = await store.getPosts({ category: 'all', days: 14 });
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildMicroChallenge({ focus, posts, fieldTopics });
+}
+
+async function handleReflectionGuide({ item, kind, context }) {
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildReflectionGuide({ item, kind, context, fieldTopics });
+}
+
+async function handleBetterQuestion(question) {
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildBetterQuestion({ question, fieldTopics });
+}
+
+async function handlePaperCoach({ text, level }) {
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildPaperCoach({ text, level, fieldTopics });
+}
+
+async function handlePeerLearning({ topic, days }) {
+  const posts = await store.getPosts({ category: 'all', days });
+  const logs = await store.getChatbotLogs({ days });
+  const fieldTopics = await getFieldExplorerTopics();
+  return buildPeerLearningMatch({ topic, posts, logs, fieldTopics });
 }
 
 async function getFieldExplorerTopics() {

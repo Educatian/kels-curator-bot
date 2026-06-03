@@ -465,6 +465,170 @@ export function buildProfileSuggestionsEmbed({ suggestions, days = 90 }) {
   return embed;
 }
 
+export function buildLearningPathEmbed({ pathway }) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Learning Path: ${pathway.label}`)
+    .setDescription(pathway.theme)
+    .setColor(0x2563eb)
+    .addFields(
+      {
+        name: 'This week',
+        value: pathway.tasks.map((task) => `- ${task}`).join('\n'),
+      },
+      {
+        name: 'Field positions',
+        value: pathway.fieldMatches.length
+          ? pathway.fieldMatches.map((topic) => `- ${topic.name} (score ${topic.score})`).join('\n')
+          : 'No FieldExplorer match yet. Add interests for a more specific path.',
+      },
+      {
+        name: 'Next moves',
+        value: pathway.nextSteps.map((step) => `- ${step}`).join('\n'),
+      },
+    )
+    .setTimestamp(new Date());
+}
+
+export function buildWeeklyChallengeEmbed({ challenge }) {
+  const embed = new EmbedBuilder()
+    .setTitle(`KELS Micro-Learning: ${challenge.title}`)
+    .setDescription(challenge.mission)
+    .setColor(0x0f766e)
+    .addFields(
+      {
+        name: 'Deliverable',
+        value: challenge.deliverable,
+      },
+      {
+        name: 'Reflection prompts',
+        value: challenge.reflection.map((prompt) => `- ${prompt}`).join('\n'),
+      },
+      {
+        name: 'FieldExplorer hints',
+        value: challenge.fieldMatches.length
+          ? challenge.fieldMatches.map((topic) => `- ${topic.name}`).join('\n')
+          : 'No current field hint. Pick any KELS post that caught your attention.',
+      },
+    )
+    .setTimestamp(new Date());
+
+  if (challenge.seedPost) {
+    embed.addFields({
+      name: 'Possible seed post',
+      value: lineFor(challenge.seedPost),
+    });
+  }
+
+  return embed;
+}
+
+export function buildReflectionEmbed({ guide }) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Reflection Coach: ${guide.kind}`)
+    .setDescription('Use these prompts to turn information into a research or teaching move.')
+    .setColor(0x7c3aed)
+    .addFields(
+      {
+        name: 'Reflection prompts',
+        value: guide.prompts.map((prompt) => `- ${prompt}`).join('\n'),
+      },
+      {
+        name: 'Field positions',
+        value: guide.fieldMatches.length
+          ? guide.fieldMatches.map((topic) => `- ${topic.name} (score ${topic.score})`).join('\n')
+          : 'No FieldExplorer match yet.',
+      },
+      {
+        name: 'Thread draft',
+        value: truncate(guide.threadDraft, 900),
+      },
+    )
+    .setTimestamp(new Date());
+}
+
+export function buildBetterQuestionEmbed({ result }) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Ask Better: ${result.focus}`)
+    .setDescription('A scaffold for turning a broad question into a more answerable research/community question.')
+    .setColor(0x0f766e)
+    .addFields(
+      {
+        name: 'Sharper versions',
+        value: result.improvedQuestions.map((question, index) => `${index + 1}. ${question}`).join('\n'),
+      },
+      {
+        name: 'Keywords',
+        value: result.keywords.length ? result.keywords.join(', ') : 'No keywords detected.',
+      },
+      {
+        name: 'Thread draft',
+        value: truncate(result.threadDraft, 900),
+      },
+    )
+    .setTimestamp(new Date());
+}
+
+export function buildPaperCoachEmbed({ coach }) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Paper Coach: ${coach.level}`)
+    .setDescription('A scaffolded reading path. Use it to read for contribution, method, and transfer to your own context.')
+    .setColor(0x2563eb)
+    .addFields(
+      {
+        name: 'Reading order',
+        value: coach.readingOrder.map((item, index) => `${index + 1}. ${item}`).join('\n'),
+      },
+      {
+        name: 'Checkpoints',
+        value: coach.checkpoints.map((item) => `- ${item}`).join('\n'),
+      },
+      {
+        name: 'Mini task',
+        value: coach.miniTask,
+      },
+      {
+        name: 'Discussion questions',
+        value: coach.discussionQuestions.map((item) => `- ${item}`).join('\n'),
+      },
+      {
+        name: 'Field positions',
+        value: coach.fieldMatches.length
+          ? coach.fieldMatches.map((topic) => `- ${topic.name} (score ${topic.score})`).join('\n')
+          : 'No FieldExplorer match yet.',
+      },
+    )
+    .setTimestamp(new Date());
+}
+
+export function buildPeerLearningEmbed({ match, days = 30 }) {
+  return new EmbedBuilder()
+    .setTitle(`KELS Peer Learning Candidates: last ${days} days`)
+    .setDescription(match.threadSeed)
+    .setColor(0x7c3aed)
+    .addFields(
+      {
+        name: 'Field positions',
+        value: match.fieldMatches.length
+          ? match.fieldMatches.map((topic) => `- ${topic.name} (score ${topic.score})`).join('\n')
+          : 'No FieldExplorer match yet.',
+      },
+      {
+        name: 'Candidate participants',
+        value: match.candidates.length
+          ? match.candidates.map((candidate) => [
+            `- ${candidate.userName} (score ${candidate.score})`,
+            candidate.evidence.length ? `  evidence: ${candidate.evidence.map((item) => `${item.source} in #${item.channelName || 'unknown'}`).join(', ')}` : '',
+          ].filter(Boolean).join('\n')).join('\n').slice(0, 1000)
+          : 'No candidate participants found yet.',
+      },
+      {
+        name: 'Suggested next step',
+        value: 'Use this as an organizer-only cue. Invite people manually or create a low-stakes thread without exposing private activity details.',
+      },
+    )
+    .setTimestamp(new Date());
+}
+
 export function buildDeadlinesEmbed(deadlines, { days = 60, category = 'all' } = {}) {
   const embed = new EmbedBuilder()
     .setTitle(`KELS Deadlines: ${CATEGORY_LABELS[category] ?? category}`)
@@ -763,6 +927,10 @@ export function buildHelpEmbed() {
           '`/venue-scout text:"paper abstract or project idea"`',
           '`/field-pulse days:14`',
           '`/anon-submit category:career text:"..."`',
+          '`/learning-path stage:phd interests:"AIED feedback"`',
+          '`/weekly-challenge focus:paper`',
+          '`/ask-better question:"..."`',
+          '`/paper-coach text:"paper abstract"`',
           '`/submit-cfp title:... deadline:... url:...`',
         ].join('\n'),
       },
@@ -772,6 +940,7 @@ export function buildHelpEmbed() {
           '`/backfill channel:#job_academic limit:100`',
           '`/post-digest category:all days:7 channel:#newsletter`',
           '`/post-field-pulse days:14 channel:#academic-resources`',
+          '`/peer-learning topic:"AIED teacher feedback"`',
           '`/stats`',
         ].join('\n'),
       },

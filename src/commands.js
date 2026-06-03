@@ -186,6 +186,101 @@ export function buildCommands() {
           .setMaxValue(365),
       ),
     new SlashCommandBuilder()
+      .setName('learning-path')
+      .setDescription('Get a stage-based KELS learning pathway for research growth.')
+      .addStringOption((option) =>
+        option
+          .setName('stage')
+          .setDescription('Your current learning/research stage')
+          .setRequired(true)
+          .addChoices(
+            { name: 'prospective', value: 'prospective' },
+            { name: 'master', value: 'master' },
+            { name: 'phd', value: 'phd' },
+            { name: 'postdoc', value: 'postdoc' },
+            { name: 'faculty', value: 'faculty' },
+            { name: 'practitioner', value: 'practitioner' },
+          ),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('interests')
+          .setDescription('Optional topics, methods, venues, or learning goals')
+          .setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('weekly-challenge')
+      .setDescription('Get a small KELS micro-learning challenge for this week.')
+      .addStringOption((option) =>
+        option
+          .setName('focus')
+          .setDescription('Challenge focus')
+          .setRequired(false)
+          .addChoices(
+            { name: 'paper', value: 'paper' },
+            { name: 'cfp', value: 'cfp' },
+            { name: 'field', value: 'field' },
+            { name: 'question', value: 'question' },
+          ),
+      ),
+    new SlashCommandBuilder()
+      .setName('reflect')
+      .setDescription('Generate reflection prompts for a paper, CFP, tool, event, or idea.')
+      .addStringOption((option) =>
+        option
+          .setName('item')
+          .setDescription('Paper, CFP, tool, event, or idea to reflect on')
+          .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('kind')
+          .setDescription('What kind of item this is')
+          .setRequired(false)
+          .addChoices(
+            { name: 'paper', value: 'paper' },
+            { name: 'cfp', value: 'cfp' },
+            { name: 'tool', value: 'tool' },
+            { name: 'event', value: 'event' },
+            { name: 'idea', value: 'idea' },
+          ),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('context')
+          .setDescription('Optional personal research/teaching context')
+          .setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('ask-better')
+      .setDescription('Turn a broad question into sharper research/community questions.')
+      .addStringOption((option) =>
+        option
+          .setName('question')
+          .setDescription('Question to improve')
+          .setRequired(true),
+      ),
+    new SlashCommandBuilder()
+      .setName('paper-coach')
+      .setDescription('Get a scaffolded reading plan for a paper or abstract.')
+      .addStringOption((option) =>
+        option
+          .setName('text')
+          .setDescription('Paper title, abstract, URL note, or pasted summary')
+          .setRequired(true)
+          .setMaxLength(1800),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('level')
+          .setDescription('Reading support level')
+          .setRequired(false)
+          .addChoices(
+            { name: 'beginner', value: 'beginner' },
+            { name: 'advanced', value: 'advanced' },
+          ),
+      ),
+    new SlashCommandBuilder()
       .setName('anon-submit')
       .setDescription('Submit an anonymous advice request for moderator review.')
       .addStringOption((option) =>
@@ -309,6 +404,24 @@ export function buildCommands() {
       .setName('curation-feedback')
       .setDescription('Show feedback signals for KELS curation from reactions, slash queries, and topic matches.')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addIntegerOption((option) =>
+        option
+          .setName('days')
+          .setDescription('How many recent days to include')
+          .setRequired(false)
+          .setMinValue(7)
+          .setMaxValue(365),
+      ),
+    new SlashCommandBuilder()
+      .setName('peer-learning')
+      .setDescription('Find candidate peer-learning participants for a topic from KELS activity signals.')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addStringOption((option) =>
+        option
+          .setName('topic')
+          .setDescription('Topic or question for a possible peer-learning thread')
+          .setRequired(true),
+      )
       .addIntegerOption((option) =>
         option
           .setName('days')

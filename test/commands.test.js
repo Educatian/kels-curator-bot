@@ -16,6 +16,11 @@ describe('slash commands', () => {
       'venue-scout',
       'field-pulse',
       'profile-suggest',
+      'learning-path',
+      'weekly-challenge',
+      'reflect',
+      'ask-better',
+      'paper-coach',
       'anon-submit',
       'submit-cfp',
       'backfill',
@@ -25,6 +30,7 @@ describe('slash commands', () => {
       'post-field-pulse',
       'community-graph',
       'curation-feedback',
+      'peer-learning',
       'deadlines',
       'help-kels',
     ]);
@@ -39,6 +45,7 @@ describe('slash commands', () => {
     const postFieldPulse = payload.find((command) => command.name === 'post-field-pulse');
     const communityGraph = payload.find((command) => command.name === 'community-graph');
     const curationFeedback = payload.find((command) => command.name === 'curation-feedback');
+    const peerLearning = payload.find((command) => command.name === 'peer-learning');
 
     expect(backfill.default_member_permissions).toBe('32');
     expect(stats.default_member_permissions).toBe('32');
@@ -47,5 +54,6 @@ describe('slash commands', () => {
     expect(postFieldPulse.default_member_permissions).toBe('32');
     expect(communityGraph.default_member_permissions).toBe('32');
     expect(curationFeedback.default_member_permissions).toBe('32');
+    expect(peerLearning.default_member_permissions).toBe('32');
   });
 });

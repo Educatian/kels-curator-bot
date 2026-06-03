@@ -723,6 +723,41 @@
         </article>
 
         <article class="command">
+          <div class="pill-row"><span class="pill member">회원</span><span class="pill private">개인 응답</span><span class="pill">Learning Path</span></div>
+          <h3>/learning-path</h3>
+          <p>회원의 단계(prospective, master, PhD, postdoc, faculty, practitioner)에 맞춰 이번 주 해볼 학습/연구 액션을 제안합니다. FieldExplorer 분야 위치와 관련 KELS 글도 함께 참고합니다.</p>
+          <div class="example">/learning-path stage:phd interests:"AIED teacher feedback"</div>
+        </article>
+
+        <article class="command">
+          <div class="pill-row"><span class="pill member">회원</span><span class="pill private">개인 응답</span><span class="pill">Micro-Learning</span></div>
+          <h3>/weekly-challenge</h3>
+          <p>논문 읽기, CFP 검토, FieldExplorer 탐색, 질문 다듬기처럼 작은 주간 학습 미션을 제공합니다. 결과물은 3줄 메모나 thread 댓글 정도로 가볍게 설계했습니다.</p>
+          <div class="example">/weekly-challenge focus:paper</div>
+        </article>
+
+        <article class="command">
+          <div class="pill-row"><span class="pill member">회원</span><span class="pill private">개인 응답</span><span class="pill">Reflection</span></div>
+          <h3>/reflect</h3>
+          <p>논문, CFP, 도구, 이벤트, 아이디어를 내 연구/수업 맥락에 연결하도록 reflection prompt와 thread draft를 만듭니다.</p>
+          <div class="example">/reflect kind:paper item:"AIED feedback paper" context:"teacher dashboard study"</div>
+        </article>
+
+        <article class="command">
+          <div class="pill-row"><span class="pill member">회원</span><span class="pill private">개인 응답</span><span class="pill">Question Scaffold</span></div>
+          <h3>/ask-better</h3>
+          <p>넓거나 막연한 질문을 learner, context, mechanism, data, venue framing이 보이는 더 답 가능한 질문으로 다듬습니다.</p>
+          <div class="example">/ask-better question:"AI 피드백은 학생에게 도움이 될까?"</div>
+        </article>
+
+        <article class="command">
+          <div class="pill-row"><span class="pill member">회원</span><span class="pill private">개인 응답</span><span class="pill">Paper Coach</span></div>
+          <h3>/paper-coach</h3>
+          <p>논문 제목, 초록, 요약을 넣으면 beginner/advanced 수준에 맞춰 읽기 순서, 체크포인트, mini task, 토론 질문을 제공합니다.</p>
+          <div class="example">/paper-coach level:advanced text:"논문 초록 또는 제목"</div>
+        </article>
+
+        <article class="command">
           <div class="pill-row"><span class="pill mod">운영자</span><span class="pill private">운영자 응답</span><span class="pill">Community Intelligence</span></div>
           <h3>/community-graph</h3>
           <p>최근 KELS 활동을 user, post, channel, slash command, reaction, FieldExplorer topic 노드와 엣지로 요약합니다. 커뮤니티 지식 그래프의 운영자용 첫 화면입니다.</p>
@@ -734,6 +769,13 @@
           <h3>/curation-feedback</h3>
           <p>reaction, slash query demand, FieldExplorer topic match를 묶어 어떤 포스팅과 주제가 큐레이션 신호를 만들었는지 보여줍니다. 추천 페이퍼, Tech Signal, Field Pulse의 다음 선택 기준을 조정하는 데 씁니다.</p>
           <div class="example">/curation-feedback days:30</div>
+        </article>
+
+        <article class="command">
+          <div class="pill-row"><span class="pill mod">운영자</span><span class="pill private">운영자 응답</span><span class="pill">Peer Learning</span></div>
+          <h3>/peer-learning</h3>
+          <p>특정 주제에 대해 관련 포스팅, slash 질문, reaction 신호를 보고 작은 peer-learning thread 후보를 운영자에게 제안합니다. 개인 활동 세부정보를 공개하지 않고, 운영자 검토용 cue로만 사용합니다.</p>
+          <div class="example">/peer-learning topic:"AIED teacher feedback" days:30</div>
         </article>
 
         <article class="command">
