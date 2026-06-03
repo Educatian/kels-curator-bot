@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { loadConfig } from '../src/config.js';
 import { buildArticleRecommendationEmbed } from '../src/format.js';
-import { fetchCandidateArticles } from '../src/openalex.js';
+import { fetchCandidateArticles, scoreArticle } from '../src/openalex.js';
 import { createQwenClient, summarizeArticleWithQwen } from '../src/qwen.js';
 import { JsonStore } from '../src/storage.js';
 
@@ -21,12 +21,18 @@ const candidates = await fetchCandidateArticles({
   days: config.articleDigestLookbackDays,
   mailto: config.openAlexMailto,
 });
-const article = candidates.find((candidate) => candidate.id === targetArticleId);
+const rawArticle = candidates.find((candidate) => candidate.id === targetArticleId);
 
-if (!article) {
+if (!rawArticle) {
   console.log(`Could not find article in OpenAlex candidates: ${targetArticleId}`);
   process.exit(1);
 }
+
+const archivePosts = await store.getPosts({ category: 'all', days: 120 });
+const article = {
+  ...rawArticle,
+  curationVotes: scoreArticle(rawArticle, new Date(), archivePosts).votes,
+};
 
 const qwen = createQwenClient(config);
 const qwenSummary = await summarizeArticleWithQwen(qwen, article);

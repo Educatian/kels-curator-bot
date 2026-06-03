@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { inferArchiveFilters, rankPostsForQuery, relatedOriginals } from '../src/relevance.js';
+import {
+  archiveEvidenceStatus,
+  formatArchiveEvidencePanel,
+  inferArchiveFilters,
+  rankPostsForQuery,
+  relatedOriginals,
+} from '../src/relevance.js';
 
 describe('archive relevance helpers', () => {
   it('infers common KELS archive filters from Korean queries', () => {
@@ -41,5 +47,43 @@ describe('archive relevance helpers', () => {
     expect(relatedOriginals(ranked)).toEqual([
       expect.objectContaining({ channelName: 'cfp-rfp', url: 'https://discord.com/channels/g/c/1' }),
     ]);
+  });
+
+  it('formats archive Q&A confidence with source metadata', () => {
+    const ranked = [
+      {
+        id: '1',
+        guildId: 'g',
+        channelId: 'c',
+        channelName: 'academic-resources',
+        content: 'AIED resource',
+        createdAt: '2026-06-01T00:00:00Z',
+        relevance: 5,
+      },
+      {
+        id: '2',
+        guildId: 'g',
+        channelId: 'jobs',
+        channelName: 'job_academic',
+        content: 'AIED job',
+        createdAt: '2026-06-02T00:00:00Z',
+        relevance: 3,
+      },
+    ];
+    const status = archiveEvidenceStatus(ranked);
+    const panel = formatArchiveEvidencePanel(relatedOriginals(ranked), status);
+
+    expect(status).toMatchObject({ label: '근거 충분', confidence: '높음' });
+    expect(panel).toContain('Archive Q&A 신뢰도');
+    expect(panel).toContain('#academic-resources');
+    expect(panel).toContain('관련도 5');
+  });
+
+  it('marks weak archive evidence explicitly', () => {
+    const status = archiveEvidenceStatus([], { weakEvidence: true });
+    const panel = formatArchiveEvidencePanel([], status);
+
+    expect(status.label).toBe('근거 부족');
+    expect(panel).toContain('표시할 만큼 직접적인 원문이 없습니다');
   });
 });

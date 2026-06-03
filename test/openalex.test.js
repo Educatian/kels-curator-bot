@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  articleVotingScorecard,
   buildRecommendationReason,
   normalizeOpenAlexWork,
   selectWeeklyArticle,
@@ -64,6 +65,45 @@ describe('OpenAlex article recommendations', () => {
 
     expect(selectWeeklyArticle(candidates, [], now).id).toBe('fresh');
     expect(selectWeeklyArticle(candidates, ['fresh'], now).id).toBe('old');
+  });
+
+  it('uses RAG voting signals when archive interests match a candidate', () => {
+    const now = new Date('2026-06-01T00:00:00.000Z');
+    const candidates = [
+      {
+        id: 'generic',
+        title: 'General Classroom Study',
+        abstract: 'A recent classroom study.',
+        publicationDate: '2026-05-28',
+        citedByCount: 1,
+        isOpenAccess: false,
+        source: 'Instructional Science',
+      },
+      {
+        id: 'archive-match',
+        title: 'Learning Analytics Feedback and AIED Collaboration',
+        abstract: 'This mixed methods study uses trace data and interviews to examine feedback and collaboration.',
+        publicationDate: '2026-04-15',
+        citedByCount: 2,
+        isOpenAccess: true,
+        source: 'Journal of the Learning Sciences',
+      },
+    ];
+    const archivePosts = [
+      {
+        content: 'KELS members are discussing AIED, learning analytics, feedback, trace data, and collaboration.',
+        channelName: 'academic-resources',
+        category: 'resource',
+        tags: ['AIED', 'learning analytics'],
+      },
+    ];
+
+    const selected = selectWeeklyArticle(candidates, [], now, { archivePosts });
+    const scorecard = articleVotingScorecard(selected, now, archivePosts);
+
+    expect(selected.id).toBe('archive-match');
+    expect(selected.curationVotes.archiveInterest).toBeGreaterThan(0);
+    expect(scorecard.methodDiversity).toBeGreaterThan(3);
   });
 
   it('builds a compact recommendation reason', () => {

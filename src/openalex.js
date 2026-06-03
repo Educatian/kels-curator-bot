@@ -1,3 +1,5 @@
+import { scoreCandidateAgainstArchive } from './relevance.js';
+
 export const KELS_JOURNAL_SOURCES = [
   { id: 'S42640028', name: 'Journal of the Learning Sciences' },
   { id: 'S64184962', name: 'International Journal of Computer-Supported Collaborative Learning' },
@@ -43,16 +45,46 @@ export async function fetchCandidateArticles({
   return (data.results ?? []).map(normalizeOpenAlexWork).filter(Boolean);
 }
 
-export function selectWeeklyArticle(candidates, previouslyRecommended = [], now = new Date()) {
+export function selectWeeklyArticle(candidates, previouslyRecommended = [], now = new Date(), { archivePosts = [] } = {}) {
   const seen = new Set(previouslyRecommended);
   const fresh = candidates.filter((candidate) => !seen.has(candidate.id));
   const pool = fresh.length ? fresh : candidates;
   return pool
-    .map((candidate) => ({
-      candidate,
-      score: scoreArticle(candidate, now),
-    }))
+    .map((candidate) => {
+      const scored = scoreArticle(candidate, now, archivePosts);
+      return {
+        candidate: { ...candidate, curationVotes: scored.votes },
+        score: scored.total,
+      };
+    })
     .sort((a, b) => b.score - a.score)[0]?.candidate ?? null;
+}
+
+export function scoreArticle(candidate, now = new Date(), archivePosts = []) {
+  const votes = articleVotingScorecard(candidate, now, archivePosts);
+  return {
+    total: votes.total,
+    votes,
+  };
+}
+
+export function articleVotingScorecard(article, now = new Date(), archivePosts = []) {
+  const archiveInterestRaw = scoreCandidateAgainstArchive(articleForArchiveScoring(article), archivePosts);
+  const archiveInterest = Math.min(35, archiveInterestRaw);
+  const recency = recencyVote(article, now);
+  const methodDiversity = methodologyVote(article);
+  const discussionPotential = discussionVote(article);
+  const total = archiveInterest + recency + methodDiversity + discussionPotential;
+  return {
+    total,
+    archiveInterest,
+    recency,
+    methodDiversity,
+    discussionPotential,
+    archiveInterestRaw,
+    methodSignals: detectMethodSignals(article).slice(0, 4),
+    discussionSignals: detectDiscussionSignals(article).slice(0, 4),
+  };
 }
 
 export function normalizeOpenAlexWork(work) {
@@ -86,11 +118,79 @@ export function buildRecommendationReason(article) {
   return reasons.length ? reasons.join(' · ') : 'selected from the KELS journal watchlist';
 }
 
-function scoreArticle(article, now) {
+function recencyVote(article, now) {
   const ageDays = article.publicationDate ? daysBetween(new Date(article.publicationDate), now) : 365;
-  const recency = Math.max(0, 365 - ageDays);
-  const oaBoost = article.isOpenAccess ? 50 : 0;
-  return recency + oaBoost + Math.min(article.citedByCount, 50);
+  if (ageDays <= 30) return 25;
+  if (ageDays <= 90) return 20;
+  if (ageDays <= 180) return 14;
+  if (ageDays <= 365) return 8;
+  return 3;
+}
+
+function methodologyVote(article) {
+  const signals = detectMethodSignals(article);
+  if (signals.length >= 4) return 20;
+  if (signals.length >= 3) return 16;
+  if (signals.length >= 2) return 12;
+  if (signals.length === 1) return 7;
+  return 3;
+}
+
+function discussionVote(article) {
+  const signals = detectDiscussionSignals(article);
+  const oaBoost = article.isOpenAccess ? 3 : 0;
+  return Math.min(20, signals.length * 4 + oaBoost + Math.min(3, article.citedByCount ?? 0));
+}
+
+function articleForArchiveScoring(article) {
+  return {
+    title: article.title,
+    summary: article.abstract,
+    description: article.abstract,
+    sourceLabel: article.source,
+    topics: [
+      article.source,
+      ...(detectMethodSignals(article) ?? []),
+      ...(detectDiscussionSignals(article) ?? []),
+    ].filter(Boolean),
+  };
+}
+
+function detectMethodSignals(article) {
+  const text = articleText(article);
+  const patterns = [
+    ['design-based research', /\bdesign[- ]based|dbr\b/i],
+    ['experiment/quasi-experiment', /\bexperiment|quasi[- ]experiment|randomized|control group|treatment\b/i],
+    ['longitudinal', /\blongitudinal|over time|growth|trajectory\b/i],
+    ['mixed methods', /\bmixed[- ]methods?|qualitative and quantitative\b/i],
+    ['qualitative', /\binterview|ethnograph|case stud|thematic|qualitative\b/i],
+    ['computational/LA', /\blearning analytics|log data|trace data|modeling|classifier|network analysis|sequence analysis\b/i],
+    ['review/synthesis', /\bsystematic review|meta[- ]analysis|scoping review|literature review|synthesis\b/i],
+  ];
+  return matchingLabels(text, patterns);
+}
+
+function detectDiscussionSignals(article) {
+  const text = articleText(article);
+  const patterns = [
+    ['AI/automation', /\bAI\b|artificial intelligence|generative|LLM|algorithm|automation/i],
+    ['collaboration/CSCL', /\bcollaboration|collaborative|cscl|group work|peer\b/i],
+    ['equity/ethics', /\bequity|ethic|bias|justice|access|inclusion|privacy\b/i],
+    ['assessment/feedback', /\bassessment|feedback|rubric|evaluation|formative\b/i],
+    ['teacher/practice', /\bteacher|instruction|classroom|pedagog|practice\b/i],
+    ['theory/mechanism', /\bmechanism|theory|conceptual|epistemic|motivation|self[- ]regulated\b/i],
+  ];
+  return matchingLabels(text, patterns);
+}
+
+function matchingLabels(text, patterns) {
+  return patterns
+    .filter(([, pattern]) => pattern.test(text))
+    .map(([label]) => label);
+}
+
+function articleText(article) {
+  return [article.title, article.abstract, article.source].filter(Boolean).join(' ');
 }
 
 function reconstructAbstract(index) {

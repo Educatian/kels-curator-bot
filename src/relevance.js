@@ -41,6 +41,36 @@ export function relatedOriginals(posts, { limit = 3, minRelevance = 1 } = {}) {
     }));
 }
 
+export function archiveEvidenceStatus(posts, { weakEvidence = false, minStrongRelevance = 4 } = {}) {
+  const usablePosts = posts.filter((post) => (post.relevance ?? 0) > 0);
+  const topRelevance = usablePosts[0]?.relevance ?? 0;
+  if (weakEvidence || !usablePosts.length) {
+    return {
+      label: '근거 부족',
+      confidence: '낮음',
+      topRelevance,
+      usableCount: usablePosts.length,
+      reason: 'archive에서 질문과 직접 맞는 원문이 충분히 잡히지 않았습니다.',
+    };
+  }
+  if (topRelevance >= minStrongRelevance && usablePosts.length >= 2) {
+    return {
+      label: '근거 충분',
+      confidence: '높음',
+      topRelevance,
+      usableCount: usablePosts.length,
+      reason: '여러 원문이 질문 핵심어와 겹치며 답변 근거로 사용할 수 있습니다.',
+    };
+  }
+  return {
+    label: '근거 제한적',
+    confidence: '중간',
+    topRelevance,
+    usableCount: usablePosts.length,
+    reason: '관련 원문은 있으나 범위가 좁아 답변을 조심스럽게 읽어야 합니다.',
+  };
+}
+
 export function scoreCandidateAgainstArchive(candidate, posts) {
   const tokens = tokenize([
     candidate.title,
@@ -63,6 +93,31 @@ export function formatRelatedOriginals(originals) {
     ...originals.map((item, index) => (
       `${index + 1}. #${item.channelName} (${String(item.createdAt ?? '').slice(0, 10)}, 관련도 ${item.relevance}) ${item.url}`
     )),
+  ].join('\n');
+}
+
+export function formatArchiveEvidencePanel(originals, evidenceStatus = null) {
+  if (!originals.length && !evidenceStatus) return '';
+  const statusLines = evidenceStatus
+    ? [
+      `근거 상태: ${evidenceStatus.label} · 신뢰도 ${evidenceStatus.confidence} · 사용 가능 원문 ${evidenceStatus.usableCount}개 · 최고 관련도 ${evidenceStatus.topRelevance}`,
+      `판단: ${evidenceStatus.reason}`,
+    ]
+    : [];
+  const originalLines = originals.length
+    ? [
+      '관련 원문:',
+      ...originals.map((item, index) => (
+        `${index + 1}. #${item.channelName} · ${String(item.createdAt ?? '').slice(0, 10)} · 관련도 ${item.relevance}\n   ${item.url}`
+      )),
+    ]
+    : ['관련 원문: 표시할 만큼 직접적인 원문이 없습니다.'];
+  return [
+    '',
+    '---',
+    'Archive Q&A 신뢰도',
+    ...statusLines,
+    ...originalLines,
   ].join('\n');
 }
 

@@ -677,6 +677,7 @@ export function buildArticleRecommendationEmbed(article, qwenSummary = null) {
         name: '선정 이유',
         value: buildRecommendationReason(article),
       },
+      ...articleVotingFields(article),
       ...articleSummaryFields(qwenSummary),
       {
         name: '초록 미리보기',
@@ -1045,6 +1046,25 @@ function groupPosts(posts) {
     groups[key].push(post);
   }
   return groups;
+}
+
+function articleVotingFields(article) {
+  const votes = article.curationVotes;
+  if (!votes) return [];
+  const methodSignals = votes.methodSignals?.length ? votes.methodSignals.join(', ') : '특정 방법론 신호 약함';
+  const discussionSignals = votes.discussionSignals?.length ? votes.discussionSignals.join(', ') : '토론 신호 약함';
+  return [
+    {
+      name: 'RAG voting scorecard',
+      value: [
+        `총점 ${votes.total}/100`,
+        `archive 관심사 ${votes.archiveInterest}/35 · 최신성 ${votes.recency}/25`,
+        `방법론 다양성 ${votes.methodDiversity}/20 · 토론 가능성 ${votes.discussionPotential}/20`,
+        `방법론 신호: ${methodSignals}`,
+        `토론 신호: ${discussionSignals}`,
+      ].join('\n').slice(0, 1000),
+    },
+  ];
 }
 
 function articleSummaryFields(qwenSummary) {

@@ -13,7 +13,8 @@ const candidates = await fetchCandidateArticles({
   days: config.articleDigestLookbackDays,
   mailto: config.openAlexMailto,
 });
-const article = selectWeeklyArticle(candidates, state.recommendedOpenAlexWorkIds ?? []);
+const archivePosts = await store.getPosts({ category: 'all', days: 120 });
+const article = selectWeeklyArticle(candidates, state.recommendedOpenAlexWorkIds ?? [], new Date(), { archivePosts });
 
 if (!article) {
   console.log('No OpenAlex candidate article found.');

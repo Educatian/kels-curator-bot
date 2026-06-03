@@ -81,7 +81,8 @@ import {
   summarizeArticleWithQwen,
 } from './qwen.js';
 import {
-  formatRelatedOriginals,
+  archiveEvidenceStatus,
+  formatArchiveEvidencePanel,
   inferArchiveFilters,
   rankPostsForQuery,
   relatedOriginals,
@@ -1161,7 +1162,8 @@ async function handleAskKels(interaction, query, category) {
   const weakEvidence = !selectedPosts.length || (selectedPosts[0]?.relevance ?? 0) < 2;
   const answer = await answerArchiveQuestionWithQwen(qwen, query, selectedPosts, { weakEvidence });
   const originals = relatedOriginals(selectedPosts, { limit: 3, minRelevance: weakEvidence ? 0 : 1 });
-  const answerWithSources = `${answer}${formatRelatedOriginals(originals)}`;
+  const evidenceStatus = archiveEvidenceStatus(selectedPosts, { weakEvidence });
+  const answerWithSources = `${answer}${formatArchiveEvidencePanel(originals, evidenceStatus)}`;
   await chatLogger.log({
     eventType: 'ask-kels',
     guildId: interaction.guildId,
@@ -1178,6 +1180,7 @@ async function handleAskKels(interaction, query, category) {
       matchedPosts: posts.length,
       usedPosts: selectedPosts.map((post) => ({ id: post.id, relevance: post.relevance })),
       weakEvidence,
+      evidenceStatus,
       qwenEnabled: qwen.enabled,
     },
   });
@@ -1576,7 +1579,8 @@ function scheduleWeeklyArticleRecommendation() {
         days: config.articleDigestLookbackDays,
         mailto: config.openAlexMailto,
       });
-      const article = selectWeeklyArticle(candidates, state.recommendedOpenAlexWorkIds ?? []);
+      const archivePosts = await store.getPosts({ category: 'all', days: 120 });
+      const article = selectWeeklyArticle(candidates, state.recommendedOpenAlexWorkIds ?? [], new Date(), { archivePosts });
       if (!article) {
         console.warn('Weekly article recommendation skipped because OpenAlex returned no candidates.');
         return;
@@ -1603,7 +1607,7 @@ function scheduleWeeklyArticleRecommendation() {
         commandName: 'scheduled',
         query: article.title,
         responseExcerpt: JSON.stringify(qwenSummary ?? {}),
-        metadata: { articleId: article.id, qwenEnabled: qwen.enabled },
+        metadata: { articleId: article.id, qwenEnabled: qwen.enabled, curationVotes: article.curationVotes },
       });
       console.log(`Posted weekly OpenAlex article recommendation: ${article.id}`);
     } catch (error) {
