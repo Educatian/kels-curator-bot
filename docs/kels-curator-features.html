@@ -296,6 +296,28 @@
       overflow-wrap: anywhere;
     }
 
+    .guide-shot {
+      margin: 18px 0 4px;
+      padding: 14px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .guide-shot img {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .guide-shot figcaption {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .steps {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -620,6 +642,10 @@
         <h3>권장 사용 흐름</h3>
         <p><code>/learning-path</code>로 이번 주 방향을 잡고, <code>/weekly-challenge</code>로 작은 과제를 정한 뒤, 읽을 자료가 있으면 <code>/paper-coach</code>, 질문이 막연하면 <code>/ask-better</code>, 커뮤니티에 공유할 생각이 생기면 <code>/reflect</code>로 thread draft를 만듭니다.</p>
       </div>
+      <figure class="guide-shot">
+        <img src="assets/guide-learning-experience.png" alt="학습경험 제공 레이어 화면 예시">
+        <figcaption>Playwright로 캡처한 학습경험 레이어 예시입니다. 회원이 성장 단계, 주간 미션, 논문 읽기, 질문 다듬기 흐름을 한눈에 볼 수 있게 구성되어 있습니다.</figcaption>
+      </figure>
     </section>
 
     <section id="member-commands">
@@ -872,6 +898,10 @@
           <div class="example">/submit-cfp title:"..." url:"..." deadline:"..."</div>
         </article>
       </div>
+      <figure class="guide-shot">
+        <img src="assets/guide-public-automation.png" alt="공개 자동화 화면 예시">
+        <figcaption>공개 자동화 예시입니다. 주간 추천 페이퍼, KELS Tech Signal, 이벤트 리마인더처럼 전체 채널에 올라가는 기능만 별도로 구분해 보여줍니다.</figcaption>
+      </figure>
     </section>
 
     <section id="public-automation">
@@ -960,6 +990,10 @@
           </ul>
         </article>
       </div>
+      <figure class="guide-shot">
+        <img src="assets/guide-admin-safety.png" alt="운영자 기능과 안전장치 화면 예시">
+        <figcaption>운영/안전 섹션 예시입니다. 상태 점검, archive 관리, role 태깅, 스팸 정책처럼 운영자가 확인해야 할 기능을 한 구역에 모았습니다.</figcaption>
+      </figure>
     </section>
 
     <section id="onboarding">
