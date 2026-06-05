@@ -1,5 +1,8 @@
 import 'dotenv/config';
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   Client,
   Events,
@@ -52,6 +55,7 @@ import { parseVenueList, normalizeVenue, parseTags, clampRating, buildAnnotation
 import { rankSubmissionFit, formatScorecard } from './submission-fit.js';
 import { buildVenuePayload, submitVenue } from './fieldexplorer-venue-add.js';
 import { fetchVenueReviews, formatVenueReviews, formatWeeklyDigest, buildWeeklyDigestData } from './fieldexplorer-digest.js';
+import { gradeQuiz, formatQuizQuestion, formatQuizFeedback, formatLearnModules } from './fieldexplorer-quiz.js';
 import { readFile as fxReadFile } from 'node:fs/promises';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
@@ -459,6 +463,41 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'learn') {
+    if (!config.fieldExplorerEduEnabled) {
+      await interaction.reply({ ephemeral: true, content: '학습 기능이 아직 비활성화되어 있어요. 운영자가 `FIELD_EXPLORER_EDU_ENABLED`를 설정하면 사용할 수 있습니다.' });
+      return;
+    }
+    await interaction.reply({ ephemeral: true, content: truncateDiscord(formatLearnModules(), 1900) });
+    return;
+  }
+
+  if (interaction.commandName === 'quiz') {
+    await interaction.deferReply({ ephemeral: true });
+    if (!config.fieldExplorerEduEnabled) {
+      await interaction.editReply('퀴즈 기능이 아직 비활성화되어 있어요. 운영자가 `FIELD_EXPLORER_EDU_ENABLED`를 설정하면 사용할 수 있습니다.');
+      return;
+    }
+    const items = await getQuizItems();
+    if (items.length === 0) {
+      await interaction.editReply('퀴즈 문항을 불러오지 못했어요. 운영자에게 문의해 주세요.');
+      return;
+    }
+    const idx = Math.floor(Math.random() * items.length);
+    const item = items[idx];
+    const row = new ActionRowBuilder().addComponents(
+      (item.options || []).slice(0, 5).map((o, i) =>
+        new ButtonBuilder().setCustomId(`quiz:${idx}:${i}`).setLabel(['A', 'B', 'C', 'D', 'E'][i]).setStyle(ButtonStyle.Secondary)),
+    );
+    await chatLogger.log({
+      eventType: 'quiz', guildId: interaction.guildId, channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel), userId: interaction.user.id,
+      userName: interaction.user.username, commandName: 'quiz', query: item.id, responseExcerpt: 'served', metadata: { item: item.id },
+    });
+    await interaction.editReply({ content: formatQuizQuestion(item), components: [row] });
+    return;
+  }
+
   if (interaction.commandName === 'field-pulse') {
     await interaction.deferReply({ ephemeral: true });
     const days = interaction.options.getInteger('days') ?? 14;
@@ -766,8 +805,39 @@ function reactionEmojiLabel(emoji) {
 }
 
 async function handleButtonInteraction(interaction) {
+  if (interaction.customId?.startsWith('quiz:')) {
+    await handleQuizButton(interaction);
+    return;
+  }
   if (!interaction.customId?.startsWith('anon:')) return;
   await handleAnonymousReviewAction(interaction);
+}
+
+async function handleQuizButton(interaction) {
+  try {
+    const [, idxStr, optStr] = interaction.customId.split(':');
+    const items = await getQuizItems();
+    const item = items[Number.parseInt(idxStr, 10)];
+    if (!item) {
+      await interaction.reply({ ephemeral: true, content: '이 퀴즈는 만료됐어요. `/quiz`로 새 문제를 받아보세요.' });
+      return;
+    }
+    const picked = (item.options || [])[Number.parseInt(optStr, 10)];
+    const [venues, profiles] = await Promise.all([getFieldExplorerVenueList(), getFieldExplorerProfiles()]);
+    const ranked = gradeQuiz(item, venues, profiles || {});
+    const feedback = formatQuizFeedback(item, picked, ranked);
+    await chatLogger.log({
+      eventType: 'quiz-answer', guildId: interaction.guildId, channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel), userId: interaction.user.id,
+      userName: interaction.user.username, commandName: 'quiz', query: item.id,
+      responseExcerpt: picked === ranked[0]?.name ? 'correct' : 'wrong', metadata: { item: item.id, picked },
+    });
+    // Disable buttons and append feedback.
+    await interaction.update({ content: `${formatQuizQuestion(item)}\n\n${feedback}`, components: [] });
+  } catch (error) {
+    console.error('quiz button error', error);
+    try { await interaction.reply({ ephemeral: true, content: '퀴즈 채점 중 오류가 났어요.' }); } catch { /* ignore */ }
+  }
 }
 
 async function handleAnonymousSubmission(interaction, { category, text }) {
@@ -1108,6 +1178,25 @@ async function getFieldExplorerProfiles() {
     return profiles;
   } catch {
     return null;
+  }
+}
+
+let fieldExplorerQuizCache = { filePath: '', loadedAt: 0, items: [] };
+
+async function getQuizItems() {
+  if (!config.fieldExplorerQuizFile) return [];
+  const now = Date.now();
+  if (fieldExplorerQuizCache.filePath === config.fieldExplorerQuizFile
+    && fieldExplorerQuizCache.loadedAt > now - 30 * 60 * 1000) {
+    return fieldExplorerQuizCache.items;
+  }
+  try {
+    const parsed = JSON.parse(await fxReadFile(config.fieldExplorerQuizFile, 'utf8'));
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    fieldExplorerQuizCache = { filePath: config.fieldExplorerQuizFile, loadedAt: now, items };
+    return items;
+  } catch {
+    return [];
   }
 }
 

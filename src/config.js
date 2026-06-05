@@ -86,6 +86,9 @@ export function loadConfig() {
     // Needs the semantic_profiles.json path. Gated; off by default.
     fieldExplorerScorecardEnabled: bool(process.env.FIELD_EXPLORER_SCORECARD_ENABLED),
     fieldExplorerProfilesFile: process.env.FIELD_EXPLORER_PROFILES_FILE ?? '',
+    // Educational /quiz + /learn. Quiz items file (defaults to the FieldExplorer repo).
+    fieldExplorerEduEnabled: bool(process.env.FIELD_EXPLORER_EDU_ENABLED),
+    fieldExplorerQuizFile: process.env.FIELD_EXPLORER_QUIZ_FILE ?? '',
     monthlyRadarEnabled: bool(process.env.MONTHLY_RADAR_ENABLED),
     monthlyRadarChannelId: process.env.MONTHLY_RADAR_CHANNEL_ID ?? '',
     monthlyRadarHourLocal: intEnv('MONTHLY_RADAR_HOUR_LOCAL', 9, { min: 0, max: 23 }),

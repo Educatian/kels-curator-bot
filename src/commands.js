@@ -247,6 +247,12 @@ export function buildCommands() {
           .setRequired(true),
       ),
     new SlashCommandBuilder()
+      .setName('quiz')
+      .setDescription('Venue-matching practice: guess the best venue for a sample abstract.'),
+    new SlashCommandBuilder()
+      .setName('learn')
+      .setDescription('Guided FieldExplorer learning modules (publishing literacy).'),
+    new SlashCommandBuilder()
       .setName('field-pulse')
       .setDescription('Show recent KELS activity positioned against the Field Explorer map.')
       .addIntegerOption((option) =>
