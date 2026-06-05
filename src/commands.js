@@ -238,6 +238,15 @@ export function buildCommands() {
           .setRequired(false),
       ),
     new SlashCommandBuilder()
+      .setName('venue-reviews')
+      .setDescription('Show community reviews for a journal/conference from FieldExplorer.')
+      .addStringOption((option) =>
+        option
+          .setName('venue')
+          .setDescription('Venue name (e.g. Journal of the Learning Sciences)')
+          .setRequired(true),
+      ),
+    new SlashCommandBuilder()
       .setName('field-pulse')
       .setDescription('Show recent KELS activity positioned against the Field Explorer map.')
       .addIntegerOption((option) =>

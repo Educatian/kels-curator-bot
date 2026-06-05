@@ -51,6 +51,7 @@ import { fetchVerifiedCfp, matchCfpForQuery, formatVerifiedCfpBlock, computeDays
 import { parseVenueList, normalizeVenue, parseTags, clampRating, buildAnnotationPayload, submitReview } from './fieldexplorer-review.js';
 import { rankSubmissionFit, formatScorecard } from './submission-fit.js';
 import { buildVenuePayload, submitVenue } from './fieldexplorer-venue-add.js';
+import { fetchVenueReviews, formatVenueReviews, formatWeeklyDigest, buildWeeklyDigestData } from './fieldexplorer-digest.js';
 import { readFile as fxReadFile } from 'node:fs/promises';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
@@ -122,6 +123,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
   scheduleFieldExplorerCfpAlerts();
+  scheduleFieldExplorerWeeklyDigest();
   scheduleEventReminders();
   scheduleRolelessReminders();
   scheduleOnboardingFollowups();
@@ -422,6 +424,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else {
       await interaction.editReply(`venue 추가에 실패했어요 (${outcome.error}). 운영자에게 알려주세요.`);
     }
+    return;
+  }
+
+  if (interaction.commandName === 'venue-reviews') {
+    await interaction.deferReply({ ephemeral: true });
+    const query = interaction.options.getString('venue', true);
+    if (!config.fieldExplorerSupabaseUrl || !config.fieldExplorerServiceKey) {
+      await interaction.editReply('리뷰 조회 브릿지가 아직 설정되지 않았어요. 운영자에게 문의해 주세요.');
+      return;
+    }
+    // Resolve to a canonical venue name when possible (so "JLS" etc. still match).
+    const venues = await getFieldExplorerVenueList();
+    const resolved = normalizeVenue(query, venues);
+    const venueName = resolved ? resolved.name : query;
+    const rows = await fetchVenueReviews({
+      supabaseUrl: config.fieldExplorerSupabaseUrl,
+      serviceKey: config.fieldExplorerServiceKey,
+      venueName,
+    });
+    await chatLogger.log({
+      eventType: 'venue-reviews',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'venue-reviews',
+      query: venueName,
+      responseExcerpt: `${rows.length} reviews`,
+      metadata: { venue: venueName, count: rows.length },
+    });
+    await interaction.editReply(truncateDiscord(formatVenueReviews(venueName, rows), 1900));
     return;
   }
 
@@ -1992,6 +2026,37 @@ function scheduleFieldExplorerCfpAlerts() {
       await store.setStateValue('fieldExplorerCfpAlertKeys', Array.from(posted).slice(-300));
     } catch (error) {
       console.error('Failed to post FieldExplorer CFP alerts', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+// Weekly FieldExplorer community digest: new venues + top reviews + imminent CFP.
+function scheduleFieldExplorerWeeklyDigest() {
+  if (!config.fieldExplorerDigestEnabled || !config.fieldExplorerDigestChannelId) return;
+  if (!config.fieldExplorerSupabaseUrl) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (now.weekday !== config.fieldExplorerDigestWeekday || now.hour !== config.fieldExplorerDigestHourLocal) return;
+
+      const state = await store.getState();
+      const posted = new Set(state.fieldExplorerDigestKeys ?? []);
+      const key = `feDigest:${now.date}`;
+      if (posted.has(key)) return;
+
+      const channel = await client.channels.fetch(config.fieldExplorerDigestChannelId).catch(() => null);
+      if (!channel?.isTextBased?.()) return;
+
+      const data = await buildWeeklyDigestData({ config, days: 7, cfpWindow: 30, now: new Date() });
+      const message = formatWeeklyDigest({ ...data, now: new Date() });
+      if (message) {
+        await channel.send({ content: truncateDiscord(message, 1900) });
+        console.log(`Posted FieldExplorer weekly digest (${data.venues.length} venues, ${data.reviews.length} reviews, ${data.cfp.length} cfp).`);
+      }
+      posted.add(key);
+      await store.setStateValue('fieldExplorerDigestKeys', Array.from(posted).slice(-30));
+    } catch (error) {
+      console.error('Failed to post FieldExplorer weekly digest', error);
     }
   }, 30 * 60 * 1000);
 }

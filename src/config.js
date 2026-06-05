@@ -77,6 +77,11 @@ export function loadConfig() {
     fieldExplorerServiceKey: process.env.FIELD_EXPLORER_SUPABASE_SERVICE_KEY ?? '',
     // /add-venue write-bridge (community_venues). Also needs the service role key.
     fieldExplorerAddVenueEnabled: bool(process.env.FIELD_EXPLORER_ADD_VENUE_ENABLED),
+    // Weekly FieldExplorer community digest (new venues + top reviews + imminent CFP).
+    fieldExplorerDigestEnabled: bool(process.env.FIELD_EXPLORER_DIGEST_ENABLED),
+    fieldExplorerDigestChannelId: process.env.FIELD_EXPLORER_DIGEST_CHANNEL_ID ?? '',
+    fieldExplorerDigestWeekday: process.env.FIELD_EXPLORER_DIGEST_WEEKDAY ?? 'Mon',
+    fieldExplorerDigestHourLocal: intEnv('FIELD_EXPLORER_DIGEST_HOUR_LOCAL', 9, { min: 0, max: 23 }),
     // Submission-fit scorecard for /venue-scout (fingerprint + methodology + CFP).
     // Needs the semantic_profiles.json path. Gated; off by default.
     fieldExplorerScorecardEnabled: bool(process.env.FIELD_EXPLORER_SCORECARD_ENABLED),
