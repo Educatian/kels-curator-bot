@@ -11,6 +11,7 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from './arxiv.js';
+import { fetchKsetUpdates } from './kset-board.js';
 import {
   buildCommunityGraph,
   buildCurationFeedback,
@@ -124,6 +125,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleWeeklyDigest();
   scheduleWeeklyArticleRecommendation();
   scheduleWeeklyTechSignal();
+  scheduleKsetUpdates();
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
   scheduleFieldExplorerCfpAlerts();
@@ -1915,6 +1917,88 @@ function scheduleWeeklyArticleRecommendation() {
       console.log(`Posted weekly OpenAlex article recommendation: ${article.id}`);
     } catch (error) {
       console.error('Failed to post scheduled OpenAlex article recommendation', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+function buildKsetUpdatesContent(items) {
+  const kindEmoji = { notice: '📢', proceedings: '📑', event: '📅', newsletter: '📰' };
+  const lines = items.map((it) => {
+    const emoji = kindEmoji[it.kind] || '•';
+    const date = it.date ? `\`${it.date}\` ` : '';
+    return `${emoji} ${date}[${it.title}](${it.url}) — _${it.boardLabel}_`;
+  });
+  return [
+    '## 🇰🇷 한국교육공학회(KSET) 새 소식',
+    '지난 한 주 kset.or.kr 공지·학술대회 발표논문(자료집)·행사·뉴스레터에서 올라온 항목입니다.',
+    '',
+    ...lines,
+    '',
+    '_출처: 한국교육공학회 kset.or.kr · 학회지 「교육공학연구」 발간 소식 포함_',
+  ].join('\n');
+}
+
+async function postKsetUpdates(channel, items) {
+  if (!channel?.isTextBased?.()) return;
+  const content = buildKsetUpdatesContent(items);
+  // Discord hard-caps message content at 2000 chars; trim items if needed.
+  if (content.length <= 2000) {
+    await channel.send({ content });
+    return;
+  }
+  let trimmed = items.slice();
+  while (trimmed.length > 1 && buildKsetUpdatesContent(trimmed).length > 2000) {
+    trimmed = trimmed.slice(0, -1);
+  }
+  await channel.send({ content: buildKsetUpdatesContent(trimmed) });
+}
+
+function scheduleKsetUpdates() {
+  if (!config.ksetUpdatesEnabled || !config.ksetUpdatesChannelId) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (!sameWeekday(now.weekday, config.ksetUpdatesWeekday) || now.hour !== config.ksetUpdatesHourLocal) return;
+
+      const runKey = `ksetUpdates:${now.date}`;
+      const state = await store.getState();
+      if (state.lastKsetUpdatesKey === runKey) return;
+
+      const { items, errors } = await fetchKsetUpdates({ sinceDays: config.ksetUpdatesLookbackDays });
+      if (errors.length) console.warn('KSET board harvest partial errors:', errors);
+
+      const posted = new Set(state.postedKsetItemIds ?? []);
+      const fresh = items.filter((it) => !posted.has(it.id)).slice(0, config.ksetUpdatesMaxItems);
+      if (fresh.length === 0) {
+        await store.setStateValue('lastKsetUpdatesKey', runKey);
+        return;
+      }
+
+      const channel = await client.channels.fetch(config.ksetUpdatesChannelId).catch(() => null);
+      if (!channel) {
+        console.warn(`KSET updates channel not found: ${config.ksetUpdatesChannelId}`);
+        return;
+      }
+
+      await postKsetUpdates(channel, fresh);
+      await store.setStateValue('lastKsetUpdatesKey', runKey);
+      await store.setStateValue('lastKsetUpdatesAt', new Date().toISOString());
+      await store.setStateValue('postedKsetItemIds', [
+        ...fresh.map((it) => it.id),
+        ...(state.postedKsetItemIds ?? []),
+      ].slice(0, 400));
+      await chatLogger.log({
+        eventType: 'weekly-kset-updates',
+        guildId: config.guildId,
+        channelId: config.ksetUpdatesChannelId,
+        commandName: 'scheduled',
+        query: 'KSET board updates',
+        responseExcerpt: fresh.map((it) => it.title).join(' | ').slice(0, 500),
+        metadata: { count: fresh.length, boards: errors.length ? 'partial' : 'all' },
+      }).catch(() => {});
+      console.log(`Posted ${fresh.length} KSET update(s).`);
+    } catch (error) {
+      console.error('Failed to post scheduled KSET updates', error);
     }
   }, 30 * 60 * 1000);
 }
