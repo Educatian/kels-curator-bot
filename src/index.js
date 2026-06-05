@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -122,8 +124,18 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User],
 });
 
+// Liveness heartbeat: a fresh timestamp lets the external health-check detect a
+// hung (logged-in but not processing) bot, not just a dead process.
+function startHeartbeat() {
+  const path = join(config.dataDir, 'heartbeat.txt');
+  const beat = () => { try { writeFileSync(path, new Date().toISOString()); } catch { /* ignore */ } };
+  beat();
+  setInterval(beat, 60 * 1000);
+}
+
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`KELS Curator Bot ready as ${readyClient.user.tag}`);
+  startHeartbeat();
   scheduleWeeklyDigest();
   scheduleWeeklyArticleRecommendation();
   scheduleWeeklyTechSignal();
