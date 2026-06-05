@@ -56,6 +56,24 @@ export function loadConfig() {
     techSignalGithubEnabled: process.env.TECH_SIGNAL_GITHUB_ENABLED === undefined ? true : bool(process.env.TECH_SIGNAL_GITHUB_ENABLED),
     techSignalGithubMinStars: intEnv('TECH_SIGNAL_GITHUB_MIN_STARS', 100, { min: 1, max: 100000 }),
     techSignalGithubQueries: splitList(process.env.TECH_SIGNAL_GITHUB_QUERIES),
+    // 한국교육공학회(KSET) 주간 업데이트: kset.or.kr 공지/소식·학술대회 발표논문(프로시딩)·
+    // 행사일정·뉴스레터를 직접 파싱해 새 항목을 주간 포스트. 저널(교육공학연구)은 ACOMS
+    // 호스팅이라 일부 환경에서 접속 불가 → 발간 소식은 공지 보드로 포착된다.
+    ksetUpdatesEnabled: bool(process.env.KSET_UPDATES_ENABLED),
+    ksetUpdatesChannelId: process.env.KSET_UPDATES_CHANNEL_ID ?? process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    ksetUpdatesWeekday: process.env.KSET_UPDATES_WEEKDAY ?? 'Fri',
+    ksetUpdatesHourLocal: intEnv('KSET_UPDATES_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    ksetUpdatesLookbackDays: intEnv('KSET_UPDATES_LOOKBACK_DAYS', 14, { min: 1, max: 180 }),
+    ksetUpdatesMaxItems: intEnv('KSET_UPDATES_MAX_ITEMS', 8, { min: 1, max: 25 }),
+    // 한국교육정보미디어학회(KAEIM) 주간 업데이트: kaeim.jams.or.kr(JAMS) 공지 보드를
+    // 직접 파싱(학회지 교육정보미디어연구 N권 M호 논문 접수 소식 포함). 서버렌더라 헤드리스
+    // 불필요. 개별 글 딥링크는 JAMS의 JS 폼방식이라 보드 페이지로 링크.
+    kaeimUpdatesEnabled: bool(process.env.KAEIM_UPDATES_ENABLED),
+    kaeimUpdatesChannelId: process.env.KAEIM_UPDATES_CHANNEL_ID ?? process.env.KSET_UPDATES_CHANNEL_ID ?? process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    kaeimUpdatesWeekday: process.env.KAEIM_UPDATES_WEEKDAY ?? 'Fri',
+    kaeimUpdatesHourLocal: intEnv('KAEIM_UPDATES_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    kaeimUpdatesLookbackDays: intEnv('KAEIM_UPDATES_LOOKBACK_DAYS', 30, { min: 1, max: 180 }),
+    kaeimUpdatesMaxItems: intEnv('KAEIM_UPDATES_MAX_ITEMS', 8, { min: 1, max: 25 }),
     fieldExplorerEnabled: bool(process.env.FIELD_EXPLORER_ENABLED),
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
