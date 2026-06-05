@@ -65,6 +65,15 @@ export function loadConfig() {
     ksetUpdatesHourLocal: intEnv('KSET_UPDATES_HOUR_LOCAL', 10, { min: 0, max: 23 }),
     ksetUpdatesLookbackDays: intEnv('KSET_UPDATES_LOOKBACK_DAYS', 14, { min: 1, max: 180 }),
     ksetUpdatesMaxItems: intEnv('KSET_UPDATES_MAX_ITEMS', 8, { min: 1, max: 25 }),
+    // 한국교육정보미디어학회(KAEIM) 주간 업데이트: kaeim.jams.or.kr(JAMS) 공지 보드를
+    // 직접 파싱(학회지 교육정보미디어연구 N권 M호 논문 접수 소식 포함). 서버렌더라 헤드리스
+    // 불필요. 개별 글 딥링크는 JAMS의 JS 폼방식이라 보드 페이지로 링크.
+    kaeimUpdatesEnabled: bool(process.env.KAEIM_UPDATES_ENABLED),
+    kaeimUpdatesChannelId: process.env.KAEIM_UPDATES_CHANNEL_ID ?? process.env.KSET_UPDATES_CHANNEL_ID ?? process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    kaeimUpdatesWeekday: process.env.KAEIM_UPDATES_WEEKDAY ?? 'Fri',
+    kaeimUpdatesHourLocal: intEnv('KAEIM_UPDATES_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    kaeimUpdatesLookbackDays: intEnv('KAEIM_UPDATES_LOOKBACK_DAYS', 30, { min: 1, max: 180 }),
+    kaeimUpdatesMaxItems: intEnv('KAEIM_UPDATES_MAX_ITEMS', 8, { min: 1, max: 25 }),
     fieldExplorerEnabled: bool(process.env.FIELD_EXPLORER_ENABLED),
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
