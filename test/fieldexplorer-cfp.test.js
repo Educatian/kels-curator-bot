@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDaysUntil, dDayLabel, matchCfpForQuery, upcomingCfp,
   formatCfpLine, formatVerifiedCfpBlock, fetchVerifiedCfp,
+  cfpAlertsForDay, formatCfpAlertMessage,
 } from '../src/fieldexplorer-cfp.js';
 
 const NOW = new Date('2026-06-05T00:00:00Z');
@@ -59,6 +60,22 @@ describe('formatting', () => {
   it('formatVerifiedCfpBlock returns a titled block or empty', () => {
     expect(formatVerifiedCfpBlock(ROWS, { now: NOW })).toContain('FieldExplorer 검증 CFP');
     expect(formatVerifiedCfpBlock([], { now: NOW })).toBe('');
+  });
+});
+
+describe('cfpAlertsForDay / formatCfpAlertMessage', () => {
+  it('selects rows hitting a threshold day exactly', () => {
+    const alerts = cfpAlertsForDay(ROWS, { now: NOW, thresholds: [7, 14] });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].row.venue_name).toBe('AIED Conference');
+    expect(alerts[0].threshold).toBe(7);
+  });
+  it('formats an alert message or empty', () => {
+    const alerts = cfpAlertsForDay(ROWS, { now: NOW, thresholds: [7] });
+    const msg = formatCfpAlertMessage(alerts, { now: NOW });
+    expect(msg).toContain('CFP D-7');
+    expect(msg).toContain('AIED Conference');
+    expect(formatCfpAlertMessage([], { now: NOW })).toBe('');
   });
 });
 

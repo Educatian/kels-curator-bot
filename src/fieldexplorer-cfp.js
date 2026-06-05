@@ -90,6 +90,26 @@ export function formatVerifiedCfpBlock(rows, { now = new Date(), title = '📅 F
   return `${title}\n${lines.join('\n')}`;
 }
 
+/** Verified CFP rows whose deadline is exactly `threshold` days away (for alerts). */
+export function cfpAlertsForDay(rows, { now = new Date(), thresholds = [30, 14, 7, 1] } = {}) {
+  const out = [];
+  for (const row of rows ?? []) {
+    const daysUntil = computeDaysUntil(row.submission_deadline, now);
+    if (daysUntil === null) continue;
+    if (thresholds.includes(daysUntil)) out.push({ row, daysUntil, threshold: daysUntil });
+  }
+  return out.sort((a, b) => a.daysUntil - b.daysUntil);
+}
+
+/** Format a batch of CFP alerts (same threshold) as a Discord message, or '' if empty. */
+export function formatCfpAlertMessage(items, { now = new Date() } = {}) {
+  if (!items || items.length === 0) return '';
+  const threshold = items[0].threshold;
+  const head = threshold === 1 ? '⏰ **내일 마감!**' : `⏰ **CFP D-${threshold} 알림**`;
+  const lines = items.map(({ row }) => `• ${formatCfpLine(row, { now })}`);
+  return `${head}\n${lines.join('\n')}`;
+}
+
 /** Fetch verified CFP rows from Supabase REST. Read-only; returns [] on failure. */
 export async function fetchVerifiedCfp({ supabaseUrl, supabaseKey, fetchImpl = fetch, limit = 200 } = {}) {
   if (!supabaseUrl || !supabaseKey) return [];

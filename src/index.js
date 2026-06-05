@@ -47,10 +47,9 @@ import {
   formatWatchList,
 } from './format.js';
 import { buildVenueScout, loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
-import { fetchVerifiedCfp, matchCfpForQuery, formatVerifiedCfpBlock } from './fieldexplorer-cfp.js';
+import { fetchVerifiedCfp, matchCfpForQuery, formatVerifiedCfpBlock, computeDaysUntil, cfpAlertsForDay, formatCfpAlertMessage } from './fieldexplorer-cfp.js';
 import { parseVenueList, normalizeVenue, parseTags, clampRating, buildAnnotationPayload, submitReview } from './fieldexplorer-review.js';
 import { rankSubmissionFit, formatScorecard } from './submission-fit.js';
-import { computeDaysUntil } from './fieldexplorer-cfp.js';
 import { readFile as fxReadFile } from 'node:fs/promises';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
@@ -121,6 +120,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleWeeklyTechSignal();
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
+  scheduleFieldExplorerCfpAlerts();
   scheduleEventReminders();
   scheduleRolelessReminders();
   scheduleOnboardingFollowups();
@@ -1894,6 +1894,54 @@ function scheduleDeadlineReminders() {
       await store.setStateValue('postedDeadlineReminderKeys', Array.from(posted).slice(-300));
     } catch (error) {
       console.error('Failed to post KELS deadline reminders', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+// Proactive FieldExplorer CFP alerts: posts D-30/14/7/1 reminders for verified
+// deadlines to a channel. Gated; off unless enabled + channel + Supabase set.
+function scheduleFieldExplorerCfpAlerts() {
+  if (!config.fieldExplorerCfpAlertEnabled || !config.fieldExplorerCfpAlertChannelId) return;
+  if (!config.fieldExplorerSupabaseUrl || !config.fieldExplorerSupabaseKey) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (now.hour !== config.fieldExplorerCfpAlertHourLocal) return;
+
+      const state = await store.getState();
+      const posted = new Set(state.fieldExplorerCfpAlertKeys ?? []);
+      const channel = await client.channels.fetch(config.fieldExplorerCfpAlertChannelId).catch(() => null);
+      if (!channel?.isTextBased?.()) return;
+
+      const thresholds = config.fieldExplorerCfpAlertDays.length
+        ? config.fieldExplorerCfpAlertDays
+        : [30, 14, 7, 1];
+      const rows = await fetchVerifiedCfp({
+        supabaseUrl: config.fieldExplorerSupabaseUrl,
+        supabaseKey: config.fieldExplorerSupabaseKey,
+      });
+      const alerts = cfpAlertsForDay(rows, { now: new Date(), thresholds });
+
+      // Group by threshold and post once per (date, threshold).
+      const byThreshold = new Map();
+      for (const a of alerts) {
+        if (!byThreshold.has(a.threshold)) byThreshold.set(a.threshold, []);
+        byThreshold.get(a.threshold).push(a);
+      }
+      for (const [threshold, items] of byThreshold) {
+        const key = `feCfpAlert:${now.date}:D${threshold}`;
+        if (posted.has(key)) continue;
+        const message = formatCfpAlertMessage(items, { now: new Date() });
+        if (message) {
+          await channel.send({ content: message });
+          console.log(`Posted FieldExplorer CFP D-${threshold} alert with ${items.length} venue(s).`);
+        }
+        posted.add(key);
+      }
+
+      await store.setStateValue('fieldExplorerCfpAlertKeys', Array.from(posted).slice(-300));
+    } catch (error) {
+      console.error('Failed to post FieldExplorer CFP alerts', error);
     }
   }, 30 * 60 * 1000);
 }
