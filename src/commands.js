@@ -164,6 +164,35 @@ export function buildCommands() {
           .setMaxValue(365),
       ),
     new SlashCommandBuilder()
+      .setName('review')
+      .setDescription('Add a venue review to FieldExplorer directly from Discord.')
+      .addStringOption((option) =>
+        option
+          .setName('venue')
+          .setDescription('Journal or conference name (e.g. Journal of the Learning Sciences)')
+          .setRequired(true),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('rating')
+          .setDescription('Rating 1-5')
+          .setRequired(true)
+          .setMinValue(1)
+          .setMaxValue(5),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('comment')
+          .setDescription('Your short review / note')
+          .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('tags')
+          .setDescription('Optional comma-separated tags (e.g. CSCL, methods)')
+          .setRequired(false),
+      ),
+    new SlashCommandBuilder()
       .setName('field-pulse')
       .setDescription('Show recent KELS activity positioned against the Field Explorer map.')
       .addIntegerOption((option) =>

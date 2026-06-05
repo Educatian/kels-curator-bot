@@ -14,6 +14,7 @@ describe('slash commands', () => {
       'topic-digest',
       'field-map',
       'venue-scout',
+      'review',
       'field-pulse',
       'profile-suggest',
       'learning-path',
