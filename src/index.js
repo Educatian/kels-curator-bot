@@ -13,6 +13,7 @@ import {
 import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from './arxiv.js';
 import { fetchKsetUpdates } from './kset-board.js';
 import { fetchKaeimUpdates, KAEIM_NOTICE_URL } from './kaeim-board.js';
+import { fetchJournalArticles, KCI_JOURNALS } from './kci.js';
 import {
   buildCommunityGraph,
   buildCurationFeedback,
@@ -128,6 +129,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleWeeklyTechSignal();
   scheduleKsetUpdates();
   scheduleKaeimUpdates();
+  scheduleKciJournalDigest();
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
   scheduleFieldExplorerCfpAlerts();
@@ -2081,6 +2083,98 @@ function scheduleKaeimUpdates() {
       console.log(`Posted ${fresh.length} KAEIM update(s).`);
     } catch (error) {
       console.error('Failed to post scheduled KAEIM updates', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+function kciArticleId(a) {
+  return a.doi || a.url || a.articleId || `${a.journal}-${a.volume}-${a.issue}-${(a.titleKo || '').slice(0, 24)}`;
+}
+
+function buildKciJournalContent(journal, articles) {
+  const blocks = articles.map((a) => {
+    const authors = a.authors.length ? a.authors.slice(0, 4).join(', ') + (a.authors.length > 4 ? ' 외' : '') : '';
+    const where = [a.volume && `${a.volume}권`, a.issue && `${a.issue}호`, a.pubYear && `${a.pubYear}.${a.pubMon || ''}`]
+      .filter(Boolean).join(' ');
+    const linkTitle = (a.url || a.doi) ? `[${a.titleKo}](${a.url || a.doi})` : a.titleKo;
+    const abstract = (a.abstractKo || '').replace(/\s+/g, ' ').trim();
+    const excerpt = abstract ? `> ${abstract.slice(0, 220)}${abstract.length > 220 ? '…' : ''}` : '';
+    return [`**${linkTitle}**`, `${authors}${where ? ` · ${where}` : ''}`, excerpt].filter(Boolean).join('\n');
+  });
+  return [
+    `## 📚 ${journal.name} 최신 논문 (초록)`,
+    `_${journal.society} · KCI 색인 기준_`,
+    '',
+    blocks.join('\n\n'),
+  ].join('\n');
+}
+
+async function postKciJournalDigest(channel, journal, articles) {
+  if (!channel?.isTextBased?.()) return;
+  let items = articles.slice();
+  let content = buildKciJournalContent(journal, items);
+  while (items.length > 1 && content.length > 2000) {
+    items = items.slice(0, -1);
+    content = buildKciJournalContent(journal, items);
+  }
+  await channel.send({ content: content.slice(0, 2000) });
+}
+
+function scheduleKciJournalDigest() {
+  if (!config.kciDigestEnabled || !config.kciDigestChannelId || !config.kciApiKey) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (!sameWeekday(now.weekday, config.kciDigestWeekday) || now.hour !== config.kciDigestHourLocal) return;
+
+      const runKey = `kciDigest:${now.date}`;
+      const state = await store.getState();
+      if (state.lastKciDigestKey === runKey) return;
+
+      const channel = await client.channels.fetch(config.kciDigestChannelId).catch(() => null);
+      if (!channel) {
+        console.warn(`KCI digest channel not found: ${config.kciDigestChannelId}`);
+        return;
+      }
+
+      const posted = new Set(state.postedKciArticleIds ?? []);
+      const thisYear = now.date.slice(0, 4);
+      const newIds = [];
+      let totalPosted = 0;
+
+      for (const journal of KCI_JOURNALS) {
+        let { articles } = await fetchJournalArticles({
+          key: config.kciApiKey, journalName: journal.name, year: thisYear, max: config.kciDigestMaxPerJournal,
+        });
+        if (articles.length === 0) {
+          ({ articles } = await fetchJournalArticles({
+            key: config.kciApiKey, journalName: journal.name, year: String(Number(thisYear) - 1), max: config.kciDigestMaxPerJournal,
+          }));
+        }
+        const fresh = articles.filter((a) => !posted.has(kciArticleId(a)));
+        if (fresh.length === 0) continue;
+        await postKciJournalDigest(channel, journal, fresh);
+        fresh.forEach((a) => newIds.push(kciArticleId(a)));
+        totalPosted += fresh.length;
+      }
+
+      await store.setStateValue('lastKciDigestKey', runKey);
+      if (newIds.length) {
+        await store.setStateValue('postedKciArticleIds', [...newIds, ...(state.postedKciArticleIds ?? [])].slice(0, 600));
+        await store.setStateValue('lastKciDigestAt', new Date().toISOString());
+        await chatLogger.log({
+          eventType: 'weekly-kci-journal-digest',
+          guildId: config.guildId,
+          channelId: config.kciDigestChannelId,
+          commandName: 'scheduled',
+          query: 'KCI journal abstracts',
+          responseExcerpt: `posted ${totalPosted} article(s)`,
+          metadata: { count: totalPosted },
+        }).catch(() => {});
+      }
+      console.log(`Posted KCI journal digest: ${totalPosted} article(s).`);
+    } catch (error) {
+      console.error('Failed to post scheduled KCI journal digest', error);
     }
   }, 30 * 60 * 1000);
 }

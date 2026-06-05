@@ -74,6 +74,15 @@ export function loadConfig() {
     kaeimUpdatesHourLocal: intEnv('KAEIM_UPDATES_HOUR_LOCAL', 10, { min: 0, max: 23 }),
     kaeimUpdatesLookbackDays: intEnv('KAEIM_UPDATES_LOOKBACK_DAYS', 30, { min: 1, max: 180 }),
     kaeimUpdatesMaxItems: intEnv('KAEIM_UPDATES_MAX_ITEMS', 8, { min: 1, max: 25 }),
+    // KCI Open API 저널 초록 다이제스트: 교육공학연구·교육정보미디어연구 최신 논문 제목+
+    // 초록+DOI를 주간 포스트. ACOMS/JAMS/DBpia가 다 막혀서 초록의 유일한 깔끔한 소스.
+    // 무료 키 필요(open.kci.go.kr → OpenAPI 인증키). 기본 OFF.
+    kciDigestEnabled: bool(process.env.KCI_DIGEST_ENABLED),
+    kciApiKey: process.env.KCI_API_KEY ?? '',
+    kciDigestChannelId: process.env.KCI_DIGEST_CHANNEL_ID ?? process.env.KSET_UPDATES_CHANNEL_ID ?? process.env.ARTICLE_DIGEST_CHANNEL_ID ?? '',
+    kciDigestWeekday: process.env.KCI_DIGEST_WEEKDAY ?? 'Tue',
+    kciDigestHourLocal: intEnv('KCI_DIGEST_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    kciDigestMaxPerJournal: intEnv('KCI_DIGEST_MAX_PER_JOURNAL', 3, { min: 1, max: 8 }),
     fieldExplorerEnabled: bool(process.env.FIELD_EXPLORER_ENABLED),
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
