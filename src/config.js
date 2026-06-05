@@ -60,6 +60,25 @@ export function loadConfig() {
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
     fieldExplorerAppUrl: process.env.FIELD_EXPLORER_APP_URL ?? '',
+    // Live verified-CFP bridge (read-only Supabase). Gated; off until configured.
+    fieldExplorerCfpEnabled: bool(process.env.FIELD_EXPLORER_CFP_ENABLED),
+    fieldExplorerSupabaseUrl: process.env.FIELD_EXPLORER_SUPABASE_URL ?? '',
+    fieldExplorerSupabaseKey: process.env.FIELD_EXPLORER_SUPABASE_KEY ?? '',
+    // Proactive CFP deadline alerts: posts D-30/14/7/1 reminders to a channel.
+    fieldExplorerCfpAlertEnabled: bool(process.env.FIELD_EXPLORER_CFP_ALERT_ENABLED),
+    fieldExplorerCfpAlertChannelId: process.env.FIELD_EXPLORER_CFP_ALERT_CHANNEL_ID ?? '',
+    fieldExplorerCfpAlertHourLocal: intEnv('FIELD_EXPLORER_CFP_ALERT_HOUR_LOCAL', 9, { min: 0, max: 23 }),
+    fieldExplorerCfpAlertDays: (splitList(process.env.FIELD_EXPLORER_CFP_ALERT_DAYS)
+      .map((n) => Number.parseInt(n, 10))
+      .filter((n) => Number.isFinite(n) && n >= 0)),
+    // Review write-bridge (/review -> FieldExplorer annotations). Needs the SERVICE
+    // ROLE key because annotations RLS has no insert policy. Gated; off by default.
+    fieldExplorerReviewEnabled: bool(process.env.FIELD_EXPLORER_REVIEW_ENABLED),
+    fieldExplorerServiceKey: process.env.FIELD_EXPLORER_SUPABASE_SERVICE_KEY ?? '',
+    // Submission-fit scorecard for /venue-scout (fingerprint + methodology + CFP).
+    // Needs the semantic_profiles.json path. Gated; off by default.
+    fieldExplorerScorecardEnabled: bool(process.env.FIELD_EXPLORER_SCORECARD_ENABLED),
+    fieldExplorerProfilesFile: process.env.FIELD_EXPLORER_PROFILES_FILE ?? '',
     monthlyRadarEnabled: bool(process.env.MONTHLY_RADAR_ENABLED),
     monthlyRadarChannelId: process.env.MONTHLY_RADAR_CHANNEL_ID ?? '',
     monthlyRadarHourLocal: intEnv('MONTHLY_RADAR_HOUR_LOCAL', 9, { min: 0, max: 23 }),

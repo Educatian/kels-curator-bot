@@ -47,6 +47,10 @@ import {
   formatWatchList,
 } from './format.js';
 import { buildVenueScout, loadFieldExplorerTopics, rankFieldTopics } from './field-explorer.js';
+import { fetchVerifiedCfp, matchCfpForQuery, formatVerifiedCfpBlock, computeDaysUntil, cfpAlertsForDay, formatCfpAlertMessage } from './fieldexplorer-cfp.js';
+import { parseVenueList, normalizeVenue, parseTags, clampRating, buildAnnotationPayload, submitReview } from './fieldexplorer-review.js';
+import { rankSubmissionFit, formatScorecard } from './submission-fit.js';
+import { readFile as fxReadFile } from 'node:fs/promises';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
 import {
@@ -116,6 +120,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleWeeklyTechSignal();
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
+  scheduleFieldExplorerCfpAlerts();
   scheduleEventReminders();
   scheduleRolelessReminders();
   scheduleOnboardingFollowups();
@@ -206,7 +211,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === 'cfp-helper') {
     await interaction.deferReply({ ephemeral: true });
     const text = interaction.options.getString('text', true);
-    const result = await analyzeCfpWithQwen(qwen, text);
+    let result = await analyzeCfpWithQwen(qwen, text);
+    // Augment with FieldExplorer verified CFP (provenance-tagged), when configured.
+    if (config.fieldExplorerCfpEnabled) {
+      const rows = await fetchVerifiedCfp({
+        supabaseUrl: config.fieldExplorerSupabaseUrl,
+        supabaseKey: config.fieldExplorerSupabaseKey,
+      });
+      const matched = matchCfpForQuery(rows, text, { limit: 5 });
+      const block = formatVerifiedCfpBlock(matched.length ? matched : rows, { now: new Date() });
+      if (block) result = `${result}\n\n${block}`;
+    }
     await chatLogger.log({
       eventType: 'cfp-helper',
       guildId: interaction.guildId,
@@ -302,6 +317,61 @@ client.on(Events.InteractionCreate, async (interaction) => {
         enabled: result.enabled,
       })],
     });
+    // Higher-precision fingerprint scorecard (topic + methodology + CFP), when enabled.
+    const scorecard = await buildScorecardBlock(query);
+    if (scorecard) {
+      await interaction.followUp({ ephemeral: true, content: truncateDiscord(scorecard, 1900) });
+    }
+    return;
+  }
+
+  if (interaction.commandName === 'review') {
+    await interaction.deferReply({ ephemeral: true });
+    const venueQuery = interaction.options.getString('venue', true);
+    const rating = clampRating(interaction.options.getInteger('rating', true));
+    const comment = interaction.options.getString('comment', true);
+    const tags = parseTags(interaction.options.getString('tags') ?? '');
+
+    if (!config.fieldExplorerReviewEnabled) {
+      await interaction.editReply('리뷰 쓰기 브릿지가 아직 비활성화되어 있어요. 운영자가 `FIELD_EXPLORER_REVIEW_ENABLED`를 설정하면 사용할 수 있습니다.');
+      return;
+    }
+    const venues = await getFieldExplorerVenueList();
+    const venue = normalizeVenue(venueQuery, venues);
+    if (!venue) {
+      await interaction.editReply(`"${venueQuery}"와 매칭되는 FieldExplorer venue를 찾지 못했어요. 정식 명칭(예: Journal of the Learning Sciences)으로 다시 시도해 주세요.`);
+      return;
+    }
+    const payload = buildAnnotationPayload({
+      venueName: venue.name, venueType: venue.type, rating, comment, tags,
+      discordUserId: interaction.user.id,
+    });
+    const outcome = await submitReview({
+      supabaseUrl: config.fieldExplorerSupabaseUrl,
+      serviceKey: config.fieldExplorerServiceKey,
+      payload,
+    });
+    await chatLogger.log({
+      eventType: 'review',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'review',
+      query: `${venue.name} | ${rating}★`,
+      responseExcerpt: outcome.ok ? 'ok' : `fail:${outcome.error}`,
+      metadata: { venue: venue.name, rating, ok: outcome.ok },
+    });
+    if (outcome.ok) {
+      const stars = '⭐'.repeat(rating);
+      const tagText = tags.length ? `\n태그: ${tags.join(', ')}` : '';
+      await interaction.editReply(
+        `✅ **${venue.name}** 리뷰가 FieldExplorer에 추가됐어요. ${stars}\n> ${comment}${tagText}\n\n앱 리뷰 피드에서 확인: ${config.fieldExplorerAppUrl || 'FieldExplorer'}`,
+      );
+    } else {
+      await interaction.editReply(`리뷰 저장에 실패했어요 (${outcome.error}). 운영자에게 알려주세요.`);
+    }
     return;
   }
 
@@ -913,6 +983,66 @@ async function getFieldExplorerTopics() {
     topics,
   };
   return topics;
+}
+
+let fieldExplorerVenueCache = { filePath: '', loadedAt: 0, venues: [] };
+
+async function getFieldExplorerVenueList() {
+  if (!config.fieldExplorerTopicsFile) return [];
+  const now = Date.now();
+  if (
+    fieldExplorerVenueCache.filePath === config.fieldExplorerTopicsFile
+    && fieldExplorerVenueCache.loadedAt > now - 10 * 60 * 1000
+  ) {
+    return fieldExplorerVenueCache.venues;
+  }
+  try {
+    const text = await fxReadFile(config.fieldExplorerTopicsFile, 'utf8');
+    const venues = parseVenueList(text);
+    fieldExplorerVenueCache = { filePath: config.fieldExplorerTopicsFile, loadedAt: now, venues };
+    return venues;
+  } catch {
+    return [];
+  }
+}
+
+let fieldExplorerProfileCache = { filePath: '', loadedAt: 0, profiles: null };
+
+async function getFieldExplorerProfiles() {
+  if (!config.fieldExplorerProfilesFile) return null;
+  const now = Date.now();
+  if (
+    fieldExplorerProfileCache.filePath === config.fieldExplorerProfilesFile
+    && fieldExplorerProfileCache.loadedAt > now - 30 * 60 * 1000
+  ) {
+    return fieldExplorerProfileCache.profiles;
+  }
+  try {
+    const text = await fxReadFile(config.fieldExplorerProfilesFile, 'utf8');
+    const profiles = JSON.parse(text);
+    fieldExplorerProfileCache = { filePath: config.fieldExplorerProfilesFile, loadedAt: now, profiles };
+    return profiles;
+  } catch {
+    return null;
+  }
+}
+
+// Build a fingerprint-based submission-fit scorecard for an abstract, or '' if disabled.
+async function buildScorecardBlock(query) {
+  if (!config.fieldExplorerScorecardEnabled) return '';
+  const [venues, profiles] = await Promise.all([getFieldExplorerVenueList(), getFieldExplorerProfiles()]);
+  if (!profiles || venues.length === 0) return '';
+  const now = new Date();
+  const inputs = venues.map((v) => ({
+    name: v.name,
+    type: v.type,
+    impact: v.impact,
+    cfpDaysUntil: v.cfpDeadline ? computeDaysUntil(v.cfpDeadline, now) : null,
+    cfpVerified: false,
+  }));
+  const ranked = rankSubmissionFit(query, inputs, profiles);
+  if (ranked.length === 0) return '';
+  return `🎯 **투고 적합도 (FieldExplorer 지문 기반)**\n${formatScorecard(ranked, { limit: 5 })}`;
 }
 
 async function indexMessage(message) {
@@ -1764,6 +1894,54 @@ function scheduleDeadlineReminders() {
       await store.setStateValue('postedDeadlineReminderKeys', Array.from(posted).slice(-300));
     } catch (error) {
       console.error('Failed to post KELS deadline reminders', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+// Proactive FieldExplorer CFP alerts: posts D-30/14/7/1 reminders for verified
+// deadlines to a channel. Gated; off unless enabled + channel + Supabase set.
+function scheduleFieldExplorerCfpAlerts() {
+  if (!config.fieldExplorerCfpAlertEnabled || !config.fieldExplorerCfpAlertChannelId) return;
+  if (!config.fieldExplorerSupabaseUrl || !config.fieldExplorerSupabaseKey) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (now.hour !== config.fieldExplorerCfpAlertHourLocal) return;
+
+      const state = await store.getState();
+      const posted = new Set(state.fieldExplorerCfpAlertKeys ?? []);
+      const channel = await client.channels.fetch(config.fieldExplorerCfpAlertChannelId).catch(() => null);
+      if (!channel?.isTextBased?.()) return;
+
+      const thresholds = config.fieldExplorerCfpAlertDays.length
+        ? config.fieldExplorerCfpAlertDays
+        : [30, 14, 7, 1];
+      const rows = await fetchVerifiedCfp({
+        supabaseUrl: config.fieldExplorerSupabaseUrl,
+        supabaseKey: config.fieldExplorerSupabaseKey,
+      });
+      const alerts = cfpAlertsForDay(rows, { now: new Date(), thresholds });
+
+      // Group by threshold and post once per (date, threshold).
+      const byThreshold = new Map();
+      for (const a of alerts) {
+        if (!byThreshold.has(a.threshold)) byThreshold.set(a.threshold, []);
+        byThreshold.get(a.threshold).push(a);
+      }
+      for (const [threshold, items] of byThreshold) {
+        const key = `feCfpAlert:${now.date}:D${threshold}`;
+        if (posted.has(key)) continue;
+        const message = formatCfpAlertMessage(items, { now: new Date() });
+        if (message) {
+          await channel.send({ content: message });
+          console.log(`Posted FieldExplorer CFP D-${threshold} alert with ${items.length} venue(s).`);
+        }
+        posted.add(key);
+      }
+
+      await store.setStateValue('fieldExplorerCfpAlertKeys', Array.from(posted).slice(-300));
+    } catch (error) {
+      console.error('Failed to post FieldExplorer CFP alerts', error);
     }
   }, 30 * 60 * 1000);
 }
