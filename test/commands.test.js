@@ -15,6 +15,7 @@ describe('slash commands', () => {
       'field-map',
       'venue-scout',
       'review',
+      'add-venue',
       'field-pulse',
       'profile-suggest',
       'learning-path',

@@ -75,6 +75,8 @@ export function loadConfig() {
     // ROLE key because annotations RLS has no insert policy. Gated; off by default.
     fieldExplorerReviewEnabled: bool(process.env.FIELD_EXPLORER_REVIEW_ENABLED),
     fieldExplorerServiceKey: process.env.FIELD_EXPLORER_SUPABASE_SERVICE_KEY ?? '',
+    // /add-venue write-bridge (community_venues). Also needs the service role key.
+    fieldExplorerAddVenueEnabled: bool(process.env.FIELD_EXPLORER_ADD_VENUE_ENABLED),
     // Submission-fit scorecard for /venue-scout (fingerprint + methodology + CFP).
     // Needs the semantic_profiles.json path. Gated; off by default.
     fieldExplorerScorecardEnabled: bool(process.env.FIELD_EXPLORER_SCORECARD_ENABLED),

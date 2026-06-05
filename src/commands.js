@@ -193,6 +193,51 @@ export function buildCommands() {
           .setRequired(false),
       ),
     new SlashCommandBuilder()
+      .setName('add-venue')
+      .setDescription('Add a new journal/conference to FieldExplorer from Discord.')
+      .addStringOption((option) =>
+        option
+          .setName('name')
+          .setDescription('Full venue name (e.g. Journal of Open Learning)')
+          .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('categories')
+          .setDescription('Comma-separated categories (e.g. Learning Sciences, CSCL)')
+          .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('type')
+          .setDescription('Venue type')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Journal', value: 'Journal' },
+            { name: 'Conference', value: 'Conference' },
+            { name: 'SubConference', value: 'SubConference' },
+            { name: 'Organization', value: 'Organization' },
+          ),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('impact')
+          .setDescription('Optional reference tier')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Q1', value: 'Q1' },
+            { name: 'Q2', value: 'Q2' },
+            { name: 'Q3', value: 'Q3' },
+            { name: 'Q4', value: 'Q4' },
+          ),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('cfp_deadline')
+          .setDescription('Optional CFP deadline (e.g. 2026-09-01)')
+          .setRequired(false),
+      ),
+    new SlashCommandBuilder()
       .setName('field-pulse')
       .setDescription('Show recent KELS activity positioned against the Field Explorer map.')
       .addIntegerOption((option) =>

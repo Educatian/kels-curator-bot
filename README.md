@@ -12,11 +12,15 @@ The bot is designed for the Korean Edutech/Learning Sciences Researcher Network 
 
 ## Core Features
 
-- **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, `/topic-digest`, `/field-map`, `/venue-scout`, `/field-pulse`, and `/anon-submit`.
+- **Private slash commands** for `/digest`, `/search`, `/deadlines`, `/ask-kels`, `/watch`, `/profile`, `/cfp-helper`, `/topic-digest`, `/field-map`, `/venue-scout`, `/review`, `/add-venue`, `/field-pulse`, and `/anon-submit`.
 - **Public weekly article recommendation** from OpenAlex, limited to JLS, IJCSCL, ETR&D, Instructional Science, and Cognition and Instruction.
 - **KELS reading guide** for recommended articles, including problem, contribution, method, KELS research application, reading lens, issue-taking topic, discussion questions, and a participation prompt.
 - **KELS Tech Signal** that compares recent arXiv tech papers and high-signal GitHub repositories, then posts one item with fixed sections for why now, educational technology use, learning sciences use, discussion, and a participation prompt.
-- **FieldExplorer 1.0 bridge** that positions a topic, abstract, CFP, or project idea against the latest `Educatian/fieldexplorer1.0` venue/category map, links to the public app, and connects results back to related KELS archive originals.
+- **FieldExplorer 1.0 bridge** that positions a topic, abstract, CFP, or project idea against the latest `Educatian/fieldexplorer1.0` venue/category map, links to the public app, and connects results back to related KELS archive originals. The bridge now adds:
+  - **Live verified CFP** in `/cfp-helper`: appends FieldExplorer's verified deadlines (D-day, official source URL, verified date) from Supabase, plus proactive D-30/14/7/1 deadline alerts to a channel.
+  - **Submission-fit scorecard** in `/venue-scout`: ranks venues for a pasted abstract by topic-fingerprint cosine, methodology-culture fit, and CFP readiness (the same scorer the app uses).
+  - **`/review` write-bridge**: posts a venue review straight into FieldExplorer's review feed.
+  - **`/add-venue` write-bridge**: adds a new journal/conference to FieldExplorer (approved community venues merge into the app graph).
 - **Venue Scout** that turns an abstract or project idea into strong/adjacent/exploratory journal and conference lanes, with framing guidance and related KELS originals.
 - **Field Pulse** that summarizes recent KELS activity as community signals, FieldExplorer category positions, bridge opportunities, and discussion seeds.
 - **Community intelligence layer** that builds a lightweight activity graph, tracks curation feedback from reactions and slash-command demand, and suggests profile topics from member activity.
@@ -138,7 +142,11 @@ The main configuration groups are:
 - `AUTO_REACT_*`: automatic KELS and like reactions for indexed member posts and thread replies.
 - `ARTICLE_DIGEST_*`: weekly OpenAlex article recommendation.
 - `TECH_SIGNAL_*`: weekly arXiv-vs-GitHub tech signal.
-- `FIELD_EXPLORER_*`: optional `/field-map` integration with the latest FieldExplorer 1.0 `src/data/venues.json`, older embedded `index.tsx` network data, `Name,Type,Category` CSV exports, or BERTopic topic CSV files.
+- `FIELD_EXPLORER_*`: optional FieldExplorer 1.0 integration.
+  - `FIELD_EXPLORER_ENABLED` / `FIELD_EXPLORER_TOPICS_FILE` / `FIELD_EXPLORER_APP_URL`: base `/field-map` map source (`src/data/venues.json`, older embedded `index.tsx` data, `Name,Type,Category` CSV, or BERTopic CSV).
+  - `FIELD_EXPLORER_CFP_ENABLED` + `FIELD_EXPLORER_SUPABASE_URL` + `FIELD_EXPLORER_SUPABASE_KEY` (anon): live verified CFP in `/cfp-helper`. `FIELD_EXPLORER_CFP_ALERT_*` adds proactive deadline alerts to a channel.
+  - `FIELD_EXPLORER_SCORECARD_ENABLED` + `FIELD_EXPLORER_PROFILES_FILE`: submission-fit scorecard in `/venue-scout` (point at the app's `semantic_profiles.json`).
+  - `FIELD_EXPLORER_REVIEW_ENABLED` / `FIELD_EXPLORER_ADD_VENUE_ENABLED` + `FIELD_EXPLORER_SUPABASE_SERVICE_KEY`: `/review` and `/add-venue` write-bridges (service-role; the target tables have no anon insert policy). `/add-venue` needs the `community_venues` table (`supabase-community-venues.sql` in the FieldExplorer repo).
 - `MONTHLY_RADAR_*`: monthly public Knowledge Flow summary.
 - `DEADLINE_REMINDER_*`: D-14/D-7/D-2 deadline reminders.
 - `EVENT_REMINDER_*`: `@everyone` one-hour reminders, D-1 reminders, event links, and follow-up threads for timed announcement events.

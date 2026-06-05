@@ -50,6 +50,7 @@ import { buildVenueScout, loadFieldExplorerTopics, rankFieldTopics } from './fie
 import { fetchVerifiedCfp, matchCfpForQuery, formatVerifiedCfpBlock, computeDaysUntil, cfpAlertsForDay, formatCfpAlertMessage } from './fieldexplorer-cfp.js';
 import { parseVenueList, normalizeVenue, parseTags, clampRating, buildAnnotationPayload, submitReview } from './fieldexplorer-review.js';
 import { rankSubmissionFit, formatScorecard } from './submission-fit.js';
+import { buildVenuePayload, submitVenue } from './fieldexplorer-venue-add.js';
 import { readFile as fxReadFile } from 'node:fs/promises';
 import { normalizePost } from './extractors.js';
 import { fetchCandidateGithubRepos, scoreGithubRepo, selectWeeklyGithubRepo } from './github-repos.js';
@@ -371,6 +372,55 @@ client.on(Events.InteractionCreate, async (interaction) => {
       );
     } else {
       await interaction.editReply(`리뷰 저장에 실패했어요 (${outcome.error}). 운영자에게 알려주세요.`);
+    }
+    return;
+  }
+
+  if (interaction.commandName === 'add-venue') {
+    await interaction.deferReply({ ephemeral: true });
+    if (!config.fieldExplorerAddVenueEnabled) {
+      await interaction.editReply('venue 추가 브릿지가 아직 비활성화되어 있어요. 운영자가 `FIELD_EXPLORER_ADD_VENUE_ENABLED`를 설정하면 사용할 수 있습니다.');
+      return;
+    }
+    const built = buildVenuePayload({
+      name: interaction.options.getString('name', true),
+      type: interaction.options.getString('type') ?? 'Journal',
+      categories: interaction.options.getString('categories', true),
+      impact: interaction.options.getString('impact') ?? null,
+      cfpDeadline: interaction.options.getString('cfp_deadline') ?? null,
+      discordUserId: interaction.user.id,
+    });
+    if (built.error) {
+      await interaction.editReply(built.error);
+      return;
+    }
+    const outcome = await submitVenue({
+      supabaseUrl: config.fieldExplorerSupabaseUrl,
+      serviceKey: config.fieldExplorerServiceKey,
+      payload: built.payload,
+    });
+    await chatLogger.log({
+      eventType: 'add-venue',
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      channelName: displayChannelName(interaction.channel),
+      userId: interaction.user.id,
+      userName: interaction.user.username,
+      commandName: 'add-venue',
+      query: `${built.payload.name} (${built.payload.type})`,
+      responseExcerpt: outcome.ok ? 'ok' : `fail:${outcome.error}`,
+      metadata: { venue: built.payload.name, ok: outcome.ok, duplicate: outcome.duplicate },
+    });
+    if (outcome.ok) {
+      const cats = built.payload.categories.join(', ');
+      const q = built.payload.impact ? ` · ${built.payload.impact}` : '';
+      await interaction.editReply(
+        `✅ **${built.payload.name}** (${built.payload.type}${q})를 FieldExplorer에 추가했어요.\n카테고리: ${cats}\n\n앱을 새로고침하면 네트워크에 나타납니다: ${config.fieldExplorerAppUrl || 'FieldExplorer'}`,
+      );
+    } else if (outcome.duplicate) {
+      await interaction.editReply(`이미 등록된 venue예요: **${built.payload.name}**`);
+    } else {
+      await interaction.editReply(`venue 추가에 실패했어요 (${outcome.error}). 운영자에게 알려주세요.`);
     }
     return;
   }
