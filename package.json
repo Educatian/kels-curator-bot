@@ -22,6 +22,7 @@
     "article:edit": "node scripts/edit-article-recommendation-thread.js",
     "kset:demo": "node scripts/render-kset-updates.mjs",
     "kaeim:demo": "node scripts/render-kaeim-updates.mjs",
+    "korean:post": "node scripts/post-korean-updates-now.mjs",
     "tech-signal:demo": "node scripts/render-tech-signal.js",
     "tech-signal:post": "node scripts/post-tech-signal-now.js",
     "roles:roleless:dry": "node scripts/apply-roleless-member-tags.js --dry-run",
