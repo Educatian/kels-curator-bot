@@ -16,6 +16,7 @@ import { fetchCandidateTechPapers, scoreTechPaper, selectWeeklyTechPaper } from 
 import { fetchKsetUpdates } from './kset-board.js';
 import { fetchKaeimUpdates, KAEIM_NOTICE_URL } from './kaeim-board.js';
 import { fetchJournalArticles, KCI_JOURNALS } from './kci.js';
+import { fetchIntlSources } from './intl-sources.js';
 import {
   buildCommunityGraph,
   buildCurationFeedback,
@@ -142,6 +143,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   scheduleKsetUpdates();
   scheduleKaeimUpdates();
   scheduleKciJournalDigest();
+  scheduleIntlFeeds();
   scheduleMonthlyRadar();
   scheduleDeadlineReminders();
   scheduleFieldExplorerCfpAlerts();
@@ -2187,6 +2189,78 @@ function scheduleKciJournalDigest() {
       console.log(`Posted KCI journal digest: ${totalPosted} article(s).`);
     } catch (error) {
       console.error('Failed to post scheduled KCI journal digest', error);
+    }
+  }, 30 * 60 * 1000);
+}
+
+function buildIntlContent(kind, items) {
+  const heading = kind === 'cfp'
+    ? '## 🌍 국제 학회 CFP (교육공학·학습과학)'
+    : '## 🌍 국제 학회 소식 (교육공학·학습과학)';
+  const lines = items.map((it) => {
+    const date = it.date ? `\`${new Date(it.date).toISOString().slice(0, 10)}\` ` : '';
+    const title = it.link ? `[${it.title}](${it.link})` : it.title;
+    return `${kind === 'cfp' ? '📝' : '📰'} ${date}**${it.org}** · ${title}`;
+  });
+  return [heading, '', ...lines, '', '_출처: 각 학회 공식 피드 (ISLS 등)_'].join('\n');
+}
+
+async function postIntlDigest(channel, kind, items) {
+  if (!channel?.isTextBased?.() || items.length === 0) return;
+  let list = items.slice();
+  let content = buildIntlContent(kind, list);
+  while (list.length > 1 && content.length > 2000) { list = list.slice(0, -1); content = buildIntlContent(kind, list); }
+  await channel.send({ content: content.slice(0, 2000) });
+}
+
+function scheduleIntlFeeds() {
+  if (!config.intlFeedsEnabled || (!config.intlCfpChannelId && !config.intlNewsChannelId)) return;
+  setInterval(async () => {
+    try {
+      const now = localTimeParts(new Date(), config.digestTimeZone);
+      if (!sameWeekday(now.weekday, config.intlFeedsWeekday) || now.hour !== config.intlFeedsHourLocal) return;
+
+      const runKey = `intlFeeds:${now.date}`;
+      const state = await store.getState();
+      if (state.lastIntlFeedsKey === runKey) return;
+
+      const { cfp, news, errors } = await fetchIntlSources({ sinceDays: config.intlFeedsLookbackDays });
+      if (errors.length) console.warn('Intl feeds partial errors:', errors);
+
+      const posted = new Set(state.postedIntlItemIds ?? []);
+      const freshCfp = cfp.filter((i) => !posted.has(i.id)).slice(0, config.intlFeedsMaxItems);
+      const freshNews = news.filter((i) => !posted.has(i.id)).slice(0, config.intlFeedsMaxItems);
+      if (freshCfp.length === 0 && freshNews.length === 0) {
+        await store.setStateValue('lastIntlFeedsKey', runKey);
+        return;
+      }
+
+      if (freshCfp.length && config.intlCfpChannelId) {
+        const ch = await client.channels.fetch(config.intlCfpChannelId).catch(() => null);
+        if (ch) await postIntlDigest(ch, 'cfp', freshCfp);
+      }
+      if (freshNews.length && config.intlNewsChannelId) {
+        const ch = await client.channels.fetch(config.intlNewsChannelId).catch(() => null);
+        if (ch) await postIntlDigest(ch, 'news', freshNews);
+      }
+
+      await store.setStateValue('lastIntlFeedsKey', runKey);
+      await store.setStateValue('lastIntlFeedsAt', new Date().toISOString());
+      await store.setStateValue('postedIntlItemIds', [
+        ...freshCfp.map((i) => i.id), ...freshNews.map((i) => i.id), ...(state.postedIntlItemIds ?? []),
+      ].slice(0, 600));
+      await chatLogger.log({
+        eventType: 'weekly-intl-feeds',
+        guildId: config.guildId,
+        channelId: config.intlCfpChannelId || config.intlNewsChannelId,
+        commandName: 'scheduled',
+        query: 'intl edtech feeds',
+        responseExcerpt: `cfp ${freshCfp.length}, news ${freshNews.length}`,
+        metadata: { cfp: freshCfp.length, news: freshNews.length },
+      }).catch(() => {});
+      console.log(`Posted intl feeds: ${freshCfp.length} CFP, ${freshNews.length} news.`);
+    } catch (error) {
+      console.error('Failed to post scheduled intl feeds', error);
     }
   }, 30 * 60 * 1000);
 }
