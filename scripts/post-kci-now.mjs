@@ -36,8 +36,8 @@ const newIds = [];
 const messages = [];
 const intro = '> 📡 **새 기능**: 한국 대표 교육공학 저널(교육공학연구·교육정보미디어연구)의 최신 논문을 **초록과 함께** 매주(화) 모아드립니다. KCI 색인 기준 첫 다이제스트입니다.';
 for (const j of KCI_JOURNALS) {
-  let { articles } = await fetchJournalArticles({ key: config.kciApiKey, journalName: j.name, year, max: config.kciDigestMaxPerJournal });
-  if (!articles.length) ({ articles } = await fetchJournalArticles({ key: config.kciApiKey, journalName: j.name, year: String(Number(year) - 1), max: config.kciDigestMaxPerJournal }));
+  let { articles } = await fetchJournalArticles({ key: config.kciApiKey, journalName: j.name, searchTerm: j.searchTerm, year, max: config.kciDigestMaxPerJournal });
+  if (!articles.length) ({ articles } = await fetchJournalArticles({ key: config.kciApiKey, journalName: j.name, searchTerm: j.searchTerm, year: String(Number(year) - 1), max: config.kciDigestMaxPerJournal }));
   const fresh = articles.filter((a) => !posted.has(kciArticleId(a)));
   if (!fresh.length) continue;
   fresh.forEach((a) => newIds.push(kciArticleId(a)));

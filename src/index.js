@@ -2158,11 +2158,11 @@ function scheduleKciJournalDigest() {
 
       for (const journal of KCI_JOURNALS) {
         let { articles } = await fetchJournalArticles({
-          key: config.kciApiKey, journalName: journal.name, year: thisYear, max: config.kciDigestMaxPerJournal,
+          key: config.kciApiKey, journalName: journal.name, searchTerm: journal.searchTerm, year: thisYear, max: config.kciDigestMaxPerJournal,
         });
         if (articles.length === 0) {
           ({ articles } = await fetchJournalArticles({
-            key: config.kciApiKey, journalName: journal.name, year: String(Number(thisYear) - 1), max: config.kciDigestMaxPerJournal,
+            key: config.kciApiKey, journalName: journal.name, searchTerm: journal.searchTerm, year: String(Number(thisYear) - 1), max: config.kciDigestMaxPerJournal,
           }));
         }
         const fresh = articles.filter((a) => !posted.has(kciArticleId(a)));
