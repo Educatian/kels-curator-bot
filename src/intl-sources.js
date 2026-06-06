@@ -11,14 +11,34 @@
 //   APSCE html ⏳ correct news/CFP path needed
 //   iLRN  ⛔ immersivelrn.org Cloudflare 403 (needs deepcloak)
 
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 
+const execFileP = promisify(execFile);
 const parser = new XMLParser({ ignoreAttributes: false, processEntities: true });
+
+// deepcloak's venv python + the stealth-fetch helper, for type:'stealth' sources
+// (Cloudflare/bot-walled pages like iLRN). Override the python via DEEPCLOAK_PYTHON.
+const DEEPCLOAK_PYTHON = process.env.DEEPCLOAK_PYTHON
+  || 'C:\\Users\\jewoo\\AppData\\Roaming\\uv\\tools\\deepcloak\\Scripts\\python.exe';
+const STEALTH_SCRIPT = fileURLToPath(new URL('../scripts/stealth_fetch.py', import.meta.url));
+
+async function fetchStealthHtml(url) {
+  const { stdout } = await execFileP(DEEPCLOAK_PYTHON, [STEALTH_SCRIPT, url, '4000'], {
+    maxBuffer: 12 * 1024 * 1024,
+    timeout: 120000,
+    windowsHide: true,
+  });
+  return stdout;
+}
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 
 export const INTL_SOURCES = [
   { id: 'isls', org: 'ISLS', label: '국제학습과학회 (ISLS)', type: 'rss', url: 'https://www.isls.org/feed/' },
   { id: 'earli', org: 'EARLI', label: '유럽학습교수연구학회 (EARLI)', type: 'html', extract: 'earli', url: 'https://www.earli.org/news' },
+  { id: 'ilrn', org: 'iLRN', label: '몰입학습연구네트워크 (iLRN)', type: 'stealth', extract: 'ilrn', url: 'https://www.immersivelrn.org/events/' },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
@@ -91,7 +111,29 @@ export function parseEarli(html) {
   return items;
 }
 
-const EXTRACTORS = { earli: parseEarli };
+/**
+ * Parse iLRN (immersivelrn.org, Invision Community). Events live as
+ * <a href=".../events/event/NNN-slug/">TITLE</a>; the carousel repeats them, so
+ * de-dup by the numeric event id. Pure (stealth-fetched HTML in, items out).
+ */
+export function parseIlrn(html) {
+  const items = [];
+  const seen = new Set();
+  const re = /<a[^>]+href="([^"]*\/events\/event\/(\d+)-[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const link = m[1];
+    const eid = m[2];
+    if (seen.has(eid)) continue;
+    const title = stripHtml(m[3]).replace(/^(Next|Previous)\s+carousel\s+slide\s*/i, '').trim();
+    if (title.length < 6 || title.length > 140) continue;
+    seen.add(eid);
+    items.push({ id: `iLRN:${eid}`, org: 'iLRN', title, link, date: '', summary: '' });
+  }
+  return items;
+}
+
+const EXTRACTORS = { earli: parseEarli, ilrn: parseIlrn };
 
 // Render a JS page to HTML with Playwright (dynamic import so RSS-only use and
 // the unit tests never load the browser). Used for type:'html' sources.
@@ -162,6 +204,10 @@ export async function fetchIntlSources({
     }
     if (s.type === 'html' && EXTRACTORS[s.extract]) {
       const html = await fetchRenderedHtml(s.url);
+      return { source: s, items: EXTRACTORS[s.extract](html) };
+    }
+    if (s.type === 'stealth' && EXTRACTORS[s.extract]) {
+      const html = await fetchStealthHtml(s.url);
       return { source: s, items: EXTRACTORS[s.extract](html) };
     }
     return { source: s, items: [] };
