@@ -69,6 +69,28 @@ export const INTL_SOURCES = [
     allowRe: /cfp|call\s+for|l@s\s*202[6-9]|learning\s+at\s+scale/i,
     denyRe: /past|previous|201\d/,
   },
+  // AIED — via deepcloak stealth (iaied.org/conferences is JS-flaky for Playwright);
+  // the stable society page links the current AIED conference CFP.
+  {
+    id: 'aied', org: 'AIED', label: '국제인공지능교육학회 (AIED)', type: 'stealth', extract: 'configured', base: 'https://www.iaied.org', forceCfp: true,
+    url: 'https://www.iaied.org/conferences',
+    allowRe: /call.?for|cfp|aied-conference\.com\/202[6-9]/i,
+    denyRe: /202[0-5]\/|\/201\d/,
+  },
+  // LAK / EDM — current conference sites via deepcloak stealth. Year-specific URLs
+  // (lak26 / edm2026): bump annually. Pages have clean Call-For-Papers anchors.
+  {
+    id: 'lak', org: 'LAK', label: '학습분석학회 컨퍼런스 (LAK 2026)', type: 'stealth', extract: 'configured', base: 'https://www.solaresearch.org', forceCfp: true,
+    url: 'https://www.solaresearch.org/events/lak/lak26/',
+    allowRe: /call\s*for\s*paper|cfp|important\s+dates|submission\s+guide/i,
+    denyRe: /accepted/i,
+  },
+  {
+    id: 'edm', org: 'EDM', label: '교육데이터마이닝학회 컨퍼런스 (EDM 2026)', type: 'stealth', extract: 'configured', base: 'https://educationaldatamining.org', forceCfp: true,
+    url: 'https://educationaldatamining.org/edm2026/',
+    allowRe: /call\s*for\s*paper|cfp|important\s+dates|doctoral\s+consortium/i,
+    denyRe: /accepted/i,
+  },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
@@ -201,7 +223,12 @@ export function parseLinkList(html, source) {
   let m;
   while ((m = re.exec(html)) !== null) {
     const href = m[1];
-    const title = stripHtml(m[2]);
+    let title = stripHtml(m[2]);
+    // Anchor text is sometimes a bare URL (e.g. AIED's CFP link); derive a label.
+    if (/^https?:\/\//i.test(title)) {
+      const seg = title.replace(/\/+$/, '').split('/').slice(-2).join(' ').replace(/[-_]+/g, ' ');
+      title = `${source.org} ${seg}`.replace(/\s+/g, ' ').trim();
+    }
     if (title.length < 10 || title.length > 130) continue;
     const hay = `${title} ${href}`;
     if (source.allowRe && !source.allowRe.test(hay)) continue;
