@@ -2228,8 +2228,17 @@ function scheduleIntlFeeds() {
       if (errors.length) console.warn('Intl feeds partial errors:', errors);
 
       const posted = new Set(state.postedIntlItemIds ?? []);
-      const freshCfp = cfp.filter((i) => !posted.has(i.id)).slice(0, config.intlFeedsMaxItems);
-      const freshNews = news.filter((i) => !posted.has(i.id)).slice(0, config.intlFeedsMaxItems);
+      // Activation floor: never post a dated item older than when the system was
+      // seeded (no backlog spam). Undated items are gated by the posted-id seed.
+      const floor = state.seededAt ? new Date(state.seededAt) : null;
+      const isBacklog = (i) => {
+        if (!floor || !i.date) return false;
+        const d = new Date(i.date);
+        return !Number.isNaN(d.getTime()) && d < floor;
+      };
+      const fresh = (i) => !posted.has(i.id) && !isBacklog(i);
+      const freshCfp = cfp.filter(fresh).slice(0, config.intlFeedsMaxItems);
+      const freshNews = news.filter(fresh).slice(0, config.intlFeedsMaxItems);
       if (freshCfp.length === 0 && freshNews.length === 0) {
         await store.setStateValue('lastIntlFeedsKey', runKey);
         return;

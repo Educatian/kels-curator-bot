@@ -237,7 +237,11 @@ export function parseLinkList(html, source) {
     const id = `${source.org}:${link}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    items.push({ id, org: source.org, title, link, date: '', summary: '' });
+    // Many news URLs embed the date (e.g. AECT /blogs/.../2026/04/01/...); surface
+    // it so the scheduler's activation floor can skip backlog items.
+    const dm = href.match(/\/(20\d\d)\/(\d{1,2})\/(\d{1,2})(?:\/|$)/);
+    const date = dm ? `${dm[1]}-${dm[2].padStart(2, '0')}-${dm[3].padStart(2, '0')}` : '';
+    items.push({ id, org: source.org, title, link, date, summary: '' });
   }
   return items;
 }
