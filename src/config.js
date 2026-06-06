@@ -83,6 +83,15 @@ export function loadConfig() {
     kciDigestWeekday: process.env.KCI_DIGEST_WEEKDAY ?? 'Tue',
     kciDigestHourLocal: intEnv('KCI_DIGEST_HOUR_LOCAL', 10, { min: 0, max: 23 }),
     kciDigestMaxPerJournal: intEnv('KCI_DIGEST_MAX_PER_JOURNAL', 3, { min: 1, max: 8 }),
+    // 국제 교육공학/학습과학 학회 피드(ISLS RSS 등). 항목을 CFP vs 뉴스로 분류해
+    // CFP는 cfp 채널, 일반 뉴스는 자유게시판으로 라우팅. 기본 OFF.
+    intlFeedsEnabled: bool(process.env.INTL_FEEDS_ENABLED),
+    intlCfpChannelId: process.env.INTL_CFP_CHANNEL_ID ?? '',
+    intlNewsChannelId: process.env.INTL_NEWS_CHANNEL_ID ?? '',
+    intlFeedsWeekday: process.env.INTL_FEEDS_WEEKDAY ?? 'Thu',
+    intlFeedsHourLocal: intEnv('INTL_FEEDS_HOUR_LOCAL', 10, { min: 0, max: 23 }),
+    intlFeedsLookbackDays: intEnv('INTL_FEEDS_LOOKBACK_DAYS', 21, { min: 1, max: 120 }),
+    intlFeedsMaxItems: intEnv('INTL_FEEDS_MAX_ITEMS', 8, { min: 1, max: 25 }),
     fieldExplorerEnabled: bool(process.env.FIELD_EXPLORER_ENABLED),
     fieldExplorerTopicsFile: process.env.FIELD_EXPLORER_TOPICS_FILE ?? '',
     fieldExplorerLabel: process.env.FIELD_EXPLORER_LABEL ?? 'Field Explorer',
