@@ -39,7 +39,8 @@
   "dependencies": {
     "discord.js": "^14.19.3",
     "dotenv": "^16.5.0",
-    "fast-xml-parser": "^5.8.0"
+    "fast-xml-parser": "^5.8.0",
+    "playwright": "^1.60.0"
   },
   "devDependencies": {
     "vitest": "^4.1.8"

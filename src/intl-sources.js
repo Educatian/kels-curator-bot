@@ -18,10 +18,11 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 export const INTL_SOURCES = [
   { id: 'isls', org: 'ISLS', label: '국제학습과학회 (ISLS)', type: 'rss', url: 'https://www.isls.org/feed/' },
+  { id: 'earli', org: 'EARLI', label: '유럽학습교수연구학회 (EARLI)', type: 'html', extract: 'earli', url: 'https://www.earli.org/news' },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
-const CFP_RE = /(call\s+for\s+(papers|proposals|submissions?|nominations?|applications?|abstracts?|chapters?|participation|reviewers?|workshops?|posters?))|(\bcfp\b)|(submissions?\s+(are\s+)?(now\s+)?open)|(submission\s+deadline)|(proposals?\s+due)|(abstracts?\s+due)|(now\s+accepting)|(deadline\s+(for\s+)?(submission|proposal|abstract|paper))/i;
+const CFP_RE = /(call\s+for\s+(papers|proposals|submissions?|nominations?|applications?|abstracts?|chapters?|participation|reviewers?|workshops?|posters?))|(\bcfp\b)|((submissions?|applications?|nominations?)\s+(are\s+)?(now\s+)?open)|(submission\s+deadline)|(proposals?\s+due)|(abstracts?\s+due)|(now\s+accepting)|(apply\s+(now|by))|(deadline\s+(for\s+)?(submission|proposal|abstract|paper|application))/i;
 
 export function classifyItem(item) {
   return CFP_RE.test(`${item.title || ''} ${item.summary || ''}`) ? 'cfp' : 'news';
@@ -64,6 +65,47 @@ export function parseFeed(xml, org) {
     items.push({ id: `${org}:${link || title}`, org, title, link, date, summary });
   }
   return items;
+}
+
+/**
+ * Parse EARLI's (earli.org/news) rendered HTML. Each news card is an
+ * <article ... list-element ...> with a leading "DD MON YYYY" date, a title link
+ * into /news/, and the title text. Pure (rendered HTML in, items out).
+ */
+export function parseEarli(html) {
+  const items = [];
+  const seen = new Set();
+  const blocks = html.match(/<article[^>]*list-element[^>]*>[\s\S]*?<\/article>/gi) || [];
+  for (const b of blocks) {
+    const title = stripHtml((b.match(/list-element__title[^>]*>([\s\S]*?)<\/h\d>/i) || [])[1] || '');
+    if (!title) continue;
+    const date = stripHtml((b.match(/list-element__date[^>]*>([\s\S]*?)<\/div>/i) || [])[1] || '')
+      || (b.match(/(\d{1,2}\s+[A-Za-z]{3,}\s+20\d\d)/) || [])[1] || '';
+    const summary = stripHtml((b.match(/list-element__description[^>]*>([\s\S]*?)<\/p>/i) || [])[1] || '').slice(0, 280);
+    const link = (b.match(/list-element__link[\s\S]*?href="([^"]+)"/i) || b.match(/href="([^"]+\/news\/[^"]+)"/i) || [])[1] || '';
+    const id = `EARLI:${link || title}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    items.push({ id, org: 'EARLI', title, link, date, summary });
+  }
+  return items;
+}
+
+const EXTRACTORS = { earli: parseEarli };
+
+// Render a JS page to HTML with Playwright (dynamic import so RSS-only use and
+// the unit tests never load the browser). Used for type:'html' sources.
+async function fetchRenderedHtml(url) {
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ userAgent: UA });
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForTimeout(2000);
+    return await page.content();
+  } finally {
+    await browser.close();
+  }
 }
 
 function withinDays(dateStr, days, now) {
@@ -114,9 +156,15 @@ export async function fetchIntlSources({
   const news = [];
   const errors = [];
   const results = await Promise.allSettled(sources.map(async (s) => {
-    if (s.type !== 'rss') return { source: s, items: [] };
-    const xml = await fetchText(s.url, fetchImpl);
-    return { source: s, items: parseFeed(xml, s.org) };
+    if (s.type === 'rss') {
+      const xml = await fetchText(s.url, fetchImpl);
+      return { source: s, items: parseFeed(xml, s.org) };
+    }
+    if (s.type === 'html' && EXTRACTORS[s.extract]) {
+      const html = await fetchRenderedHtml(s.url);
+      return { source: s, items: EXTRACTORS[s.extract](html) };
+    }
+    return { source: s, items: [] };
   }));
   for (let i = 0; i < results.length; i++) {
     const r = results[i];

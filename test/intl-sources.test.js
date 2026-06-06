@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { parseFeed, classifyItem, fetchIntlSources } from '../src/intl-sources.js';
+import { parseFeed, classifyItem, fetchIntlSources, parseEarli } from '../src/intl-sources.js';
+
+const EARLI_HTML = `
+<div>
+<article class="card wysiwyg list-element list-element--news">
+  <div class="list-element__content">
+    <div class="list-element__date"><time datetime="">09 Mar 2026</time></div>
+    <h3 class="list-element__title">JURE Research Development Fund 2026 - Applications are now open!</h3>
+    <p class="list-element__description">We welcome applications until 8 May 2026.</p>
+    <p class="list-element__link"><a href="https://www.earli.org/news/jure-research-development-fund-2026" class="button">Read more</a></p>
+  </div>
+</article>
+<article class="card wysiwyg list-element list-element--news">
+  <div class="list-element__content">
+    <div class="list-element__date"><time datetime="">03 Mar 2026</time></div>
+    <h3 class="list-element__title">Publication Alert: New Issue Learning and Instruction (Volume 102)</h3>
+    <p class="list-element__description">A new issue is available.</p>
+    <p class="list-element__link"><a href="https://www.earli.org/news/publication-alert-li-102" class="button">Read more</a></p>
+  </div>
+</article>
+</div>`;
 
 const RSS = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
@@ -54,6 +74,21 @@ describe('parseFeed', () => {
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe('Workshop announcement');
     expect(items[0].link).toBe('https://example.org/ws');
+  });
+});
+
+describe('parseEarli', () => {
+  it('extracts title/date/link from EARLI news cards and strips the leading date', () => {
+    const items = parseEarli(EARLI_HTML);
+    expect(items).toHaveLength(2);
+    expect(items[0].org).toBe('EARLI');
+    expect(items[0].title).toBe('JURE Research Development Fund 2026 - Applications are now open!');
+    expect(items[0].title).not.toMatch(/^\d/); // date not part of title
+    expect(items[0].date).toBe('09 Mar 2026');
+    expect(items[0].summary).toContain('applications');
+    expect(items[0].link).toContain('/news/jure-research');
+    expect(classifyItem(items[0])).toBe('cfp');   // "applications are now open" -> cfp
+    expect(classifyItem(items[1])).toBe('news');  // "publication alert" -> news
   });
 });
 
