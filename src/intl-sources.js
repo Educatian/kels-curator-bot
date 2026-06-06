@@ -40,13 +40,33 @@ export const INTL_SOURCES = [
   { id: 'earli', org: 'EARLI', label: '유럽학습교수연구학회 (EARLI)', type: 'html', extract: 'earli', url: 'https://www.earli.org/news' },
   { id: 'ilrn', org: 'iLRN', label: '몰입학습연구네트워크 (iLRN)', type: 'stealth', extract: 'ilrn', url: 'https://www.immersivelrn.org/events/' },
   { id: 'aera', org: 'AERA', label: '미국교육연구학회 (AERA)', type: 'html', extract: 'aera', contentSelector: '#dnn_ContentPane', url: 'https://www.aera.net/Newsroom/News-Releases-and-Statements/2026-AERA-News-Releases-and-Statements' },
+  // SREE — explicit CFP/section pages on the homepage (Squarespace).
+  {
+    id: 'sree', org: 'SREE', label: '교육효과성연구학회 (SREE)', type: 'html', extract: 'configured', base: 'https://www.sree.org',
+    url: 'https://www.sree.org/',
+    allowRe: /call\s+for|conference|webinars?|innovation\s+day|insights\s+from|editors?,?\s*20\d\d|submission/i,
+    denyRe: /section|guide|archive|past|sponsor/i,
+  },
+  // AECT — news blog posts.
+  {
+    id: 'aect', org: 'AECT', label: '교육커뮤니케이션공학회 (AECT)', type: 'html', extract: 'configured', base: 'https://aect.org',
+    url: 'https://aect.org/news',
+    allowRe: /\/blogs\//i,
+  },
+  // APSCE — conferences (incl. external TBICS CFP sites).
+  {
+    id: 'apsce', org: 'APSCE', label: '아시아태평양컴퓨터교육학회 (APSCE)', type: 'html', extract: 'configured', base: 'https://apsce.net',
+    url: 'https://apsce.net/conferences',
+    allowRe: /conference|festival|cfp|tbics|ai-cte|ai3l|iclea|icce/i,
+    denyRe: /past\s+conferences|regulations|brief\s+history|proceedings\s*$/i,
+  },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
-const CFP_RE = /(call\s+for\s+(papers|proposals|submissions?|nominations?|applications?|abstracts?|chapters?|participation|reviewers?|workshops?|posters?))|(\bcfp\b)|((submissions?|applications?|nominations?)\s+(are\s+)?(now\s+)?open)|(submission\s+deadline)|(proposals?\s+due)|(abstracts?\s+due)|(now\s+accepting)|(apply\s+(now|by))|(deadline\s+(for\s+)?(submission|proposal|abstract|paper|application))/i;
+const CFP_RE = /(call\s+for\s+(papers|proposals|submissions?|nominations?|applications?|abstracts?|chapters?|participation|reviewers?|editors?|workshops?|posters?))|(\bcfp\b)|((submissions?|applications?|nominations?)\s+(are\s+)?(now\s+)?open)|(submission\s+deadline)|(proposals?\s+due)|(abstracts?\s+due)|(now\s+accepting)|(apply\s+(now|by))|(deadline\s+(for\s+)?(submission|proposal|abstract|paper|application))/i;
 
 export function classifyItem(item) {
-  return CFP_RE.test(`${item.title || ''} ${item.summary || ''}`) ? 'cfp' : 'news';
+  return CFP_RE.test(`${item.title || ''} ${item.summary || ''} ${item.link || ''}`) ? 'cfp' : 'news';
 }
 
 function text(node) {
@@ -159,7 +179,40 @@ export function parseAera(html) {
   return items;
 }
 
-const EXTRACTORS = { earli: parseEarli, ilrn: parseIlrn, aera: parseAera };
+/**
+ * Generic curated-link extractor for societies whose news/CFP page is a list of
+ * section/post anchors rather than a dated feed (SREE, AECT, APSCE). Keeps anchors
+ * whose "title + href" matches source.allowRe and not source.denyRe.
+ */
+export function parseLinkList(html, source) {
+  const items = [];
+  const seen = new Set();
+  const base = source.base || '';
+  const re = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const href = m[1];
+    const title = stripHtml(m[2]);
+    if (title.length < 10 || title.length > 130) continue;
+    const hay = `${title} ${href}`;
+    if (source.allowRe && !source.allowRe.test(hay)) continue;
+    if (source.denyRe && source.denyRe.test(hay)) continue;
+    const link = /^https?:/.test(href) ? href : base + (href.startsWith('/') ? href : `/${href}`);
+    const id = `${source.org}:${link}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    items.push({ id, org: source.org, title, link, date: '', summary: '' });
+  }
+  return items;
+}
+
+// Extractors receive (renderedHtml, source). Page-specific ones ignore `source`.
+const EXTRACTORS = {
+  earli: (h) => parseEarli(h),
+  ilrn: (h) => parseIlrn(h),
+  aera: (h) => parseAera(h),
+  configured: (h, s) => parseLinkList(h, s),
+};
 
 // Render a JS page to HTML with Playwright (dynamic import so RSS-only use and
 // the unit tests never load the browser). Used for type:'html' sources.
@@ -234,11 +287,11 @@ export async function fetchIntlSources({
     }
     if (s.type === 'html' && EXTRACTORS[s.extract]) {
       const html = await fetchRenderedHtml(s.url, s.contentSelector);
-      return { source: s, items: EXTRACTORS[s.extract](html) };
+      return { source: s, items: EXTRACTORS[s.extract](html, s) };
     }
     if (s.type === 'stealth' && EXTRACTORS[s.extract]) {
       const html = await fetchStealthHtml(s.url);
-      return { source: s, items: EXTRACTORS[s.extract](html) };
+      return { source: s, items: EXTRACTORS[s.extract](html, s) };
     }
     return { source: s, items: [] };
   }));

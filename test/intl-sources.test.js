@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseFeed, classifyItem, fetchIntlSources, parseEarli, parseIlrn, parseAera } from '../src/intl-sources.js';
+import { parseFeed, classifyItem, fetchIntlSources, parseEarli, parseIlrn, parseAera, parseLinkList } from '../src/intl-sources.js';
 
 const AERA_HTML = `
 <nav>
@@ -130,6 +130,24 @@ describe('parseAera', () => {
     expect(items[0].link).toBe('https://www.aera.net/Newsroom/AERA-Selects-Daniel-Solorzano-to-Deliver-2026-Brown-Lecture');
     // archive/nav links excluded
     expect(items.some((i) => /in the News|Releases and Statements/i.test(i.title))).toBe(false);
+  });
+});
+
+describe('parseLinkList (configured extractor)', () => {
+  const SREE_HTML = `
+    <a href="https://www.sree.org/call-for-papers">Call for Papers</a>
+    <a href="https://www.sree.org/2026-conference">2026 Conference</a>
+    <a href="https://www.sree.org/conference-sections">Conference Sections</a>
+    <a href="/about">About SREE Org</a>`;
+  it('keeps allowRe matches, drops denyRe and off-topic links, classifies CFP', () => {
+    const src = { org: 'SREE', base: 'https://www.sree.org', allowRe: /call\s+for|conference/i, denyRe: /section/i };
+    const items = parseLinkList(SREE_HTML, src);
+    expect(items.map((i) => i.title)).toEqual(['Call for Papers', '2026 Conference']); // sections + about dropped
+    expect(classifyItem(items[0])).toBe('cfp');
+    expect(classifyItem(items[1])).toBe('news');
+  });
+  it('classifyItem also inspects the link (href-based CFP, e.g. APSCE TBICS)', () => {
+    expect(classifyItem({ title: 'AI3L Conference & Community', link: 'https://x/TBICS2026/ai3l-2026-cfp' })).toBe('cfp');
   });
 });
 
