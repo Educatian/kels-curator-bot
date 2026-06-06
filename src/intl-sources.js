@@ -60,6 +60,15 @@ export const INTL_SOURCES = [
     allowRe: /conference|festival|cfp|tbics|ai-cte|ai3l|iclea|icce/i,
     denyRe: /past\s+conferences|regulations|brief\s+history|proceedings\s*$/i,
   },
+  // Major conference CFP from the host site (high-signal). ISLS(ICLS/CSCL),
+  // AECT(Convention), APSCE(ICCE) CFPs are already covered by their society feeds
+  // above. forceCfp routes to the CFP channel.
+  {
+    id: 'las', org: 'L@S', label: 'ACM Learning @ Scale (L@S)', type: 'html', extract: 'configured', base: 'https://learningatscale.hosting.acm.org', forceCfp: true,
+    url: 'https://learningatscale.hosting.acm.org/',
+    allowRe: /cfp|call\s+for|l@s\s*202[6-9]|learning\s+at\s+scale/i,
+    denyRe: /past|previous|201\d/,
+  },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
@@ -301,7 +310,8 @@ export async function fetchIntlSources({
     for (const it of r.value.items) {
       if (!withinDays(it.date, sinceDays, now)) continue;
       const enriched = { ...it, label: r.value.source.label };
-      (classifyItem(it) === 'cfp' ? cfp : news).push(enriched);
+      const isCfp = r.value.source.forceCfp || classifyItem(it) === 'cfp';
+      (isCfp ? cfp : news).push(enriched);
     }
   }
   const byDate = (a, b) => new Date(b.date || 0) - new Date(a.date || 0);
