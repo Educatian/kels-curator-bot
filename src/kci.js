@@ -105,13 +105,17 @@ function recencyKey(x) {
 export async function fetchJournalArticles({
   key,
   journalName,
+  searchTerm,
   year,
   max = 12,
   displayCount = 100,
   fetchImpl = fetch,
 }) {
+  // articleSearch is title-keyword based: some journal names appear in article
+  // titles (good search term), others don't, so allow a distinct searchTerm and
+  // always filter to the exact journalName.
   const { articles, resultMsg } = await kciSearchArticles({
-    key, title: journalName, year, displayCount, fetchImpl,
+    key, title: searchTerm || journalName, year, displayCount, fetchImpl,
   });
   if (resultMsg) return { articles: [], resultMsg };
   const own = articles.filter((a) => a.journal === journalName);
@@ -127,4 +131,6 @@ export async function fetchJournalArticles({
 export const KCI_JOURNALS = [
   { name: '교육공학연구', society: '한국교육공학회' },
   { name: '교육정보미디어연구', society: '한국교육정보미디어학회' },
+  { name: '교육방법연구', society: '한국교육방법학회', searchTerm: '교육방법연구' },
+  { name: '컴퓨터교육학회 논문지', society: '한국컴퓨터교육학회', searchTerm: '컴퓨터교육' },
 ];
