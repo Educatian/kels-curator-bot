@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseFeed, classifyItem, fetchIntlSources, parseEarli } from '../src/intl-sources.js';
+import { parseFeed, classifyItem, fetchIntlSources, parseEarli, parseIlrn } from '../src/intl-sources.js';
+
+const ILRN_HTML = `
+<div class="carousel">
+  <a href="https://www.immersivelrn.org/events/event/131-ilrn2026-online/" class="ipsLinkPanel"><span>iLRN2026 Online Conference</span></a>
+  <a href="https://www.immersivelrn.org/events/event/131-ilrn2026-online/" class="ipsLinkPanel" aria-hidden="true"><span>Next carousel slide iLRN2026 Online Conference</span></a>
+  <a href="https://www.immersivelrn.org/events/event/140-campus-community-build-days/" class="ipsLinkPanel"><span>Campus Community Build Days!</span></a>
+</div>`;
 
 const EARLI_HTML = `
 <div>
@@ -89,6 +96,18 @@ describe('parseEarli', () => {
     expect(items[0].link).toContain('/news/jure-research');
     expect(classifyItem(items[0])).toBe('cfp');   // "applications are now open" -> cfp
     expect(classifyItem(items[1])).toBe('news');  // "publication alert" -> news
+  });
+});
+
+describe('parseIlrn', () => {
+  it('extracts events, de-dups carousel repeats by event id, strips carousel labels', () => {
+    const items = parseIlrn(ILRN_HTML);
+    expect(items).toHaveLength(2); // 131 (deduped) + 140
+    expect(items[0].org).toBe('iLRN');
+    expect(items[0].id).toBe('iLRN:131');
+    expect(items[0].title).toBe('iLRN2026 Online Conference');
+    expect(items.map((i) => i.id)).toContain('iLRN:140');
+    expect(items.some((i) => /carousel slide/i.test(i.title))).toBe(false);
   });
 });
 
