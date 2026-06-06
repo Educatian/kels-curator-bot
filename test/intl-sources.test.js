@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { parseFeed, classifyItem, fetchIntlSources, parseEarli, parseIlrn } from '../src/intl-sources.js';
+import { parseFeed, classifyItem, fetchIntlSources, parseEarli, parseIlrn, parseAera } from '../src/intl-sources.js';
+
+const AERA_HTML = `
+<nav>
+  <a href="/Newsroom/AERA-in-the-News/2025-AERA-in-the-News">2025 AERA in the News</a>
+  <a href="/Newsroom/News-Releases-and-Statements/2026-AERA-News-Releases-and-Statements">News Releases and Statements</a>
+</nav>
+<div id="dnn_ContentPane">
+  <a href="/Newsroom/AERA-Selects-Daniel-Solorzano-to-Deliver-2026-Brown-Lecture">AERA Selects Daniel Solorzano to Deliver 2026 Brown Lecture in Education Research</a>
+  <a href="/Newsroom/AERA-Announces-2026-Award-Winners">AERA Announces 2026 Award Winners in Education Research</a>
+</div>`;
 
 const ILRN_HTML = `
 <div class="carousel">
@@ -108,6 +118,18 @@ describe('parseIlrn', () => {
     expect(items[0].title).toBe('iLRN2026 Online Conference');
     expect(items.map((i) => i.id)).toContain('iLRN:140');
     expect(items.some((i) => /carousel slide/i.test(i.title))).toBe(false);
+  });
+});
+
+describe('parseAera', () => {
+  it('keeps real /Newsroom release items and drops nav/archive links', () => {
+    const items = parseAera(AERA_HTML);
+    expect(items).toHaveLength(2);
+    expect(items[0].org).toBe('AERA');
+    expect(items[0].title).toContain('Daniel Solorzano');
+    expect(items[0].link).toBe('https://www.aera.net/Newsroom/AERA-Selects-Daniel-Solorzano-to-Deliver-2026-Brown-Lecture');
+    // archive/nav links excluded
+    expect(items.some((i) => /in the News|Releases and Statements/i.test(i.title))).toBe(false);
   });
 });
 
