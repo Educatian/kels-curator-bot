@@ -39,6 +39,7 @@ export const INTL_SOURCES = [
   { id: 'isls', org: 'ISLS', label: '국제학습과학회 (ISLS)', type: 'rss', url: 'https://www.isls.org/feed/' },
   { id: 'earli', org: 'EARLI', label: '유럽학습교수연구학회 (EARLI)', type: 'html', extract: 'earli', url: 'https://www.earli.org/news' },
   { id: 'ilrn', org: 'iLRN', label: '몰입학습연구네트워크 (iLRN)', type: 'stealth', extract: 'ilrn', url: 'https://www.immersivelrn.org/events/' },
+  { id: 'aera', org: 'AERA', label: '미국교육연구학회 (AERA)', type: 'html', extract: 'aera', contentSelector: '#dnn_ContentPane', url: 'https://www.aera.net/Newsroom/News-Releases-and-Statements/2026-AERA-News-Releases-and-Statements' },
 ];
 
 // A CFP if it solicits submissions/proposals/nominations; otherwise general news.
@@ -133,17 +134,46 @@ export function parseIlrn(html) {
   return items;
 }
 
-const EXTRACTORS = { earli: parseEarli, ilrn: parseIlrn };
+/**
+ * Parse AERA (aera.net, DotNetNuke). News releases are anchors into /Newsroom/
+ * <slug> inside the content pane; the left-nav archive links (".../AERA-in-the-News/..",
+ * ".../News-Releases-and-Statements/..", year-prefixed titles) are filtered out.
+ */
+export function parseAera(html) {
+  const items = [];
+  const seen = new Set();
+  const re = /<a[^>]+href="([^"]*\/Newsroom\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const href = m[1];
+    const title = stripHtml(m[2]);
+    if (title.length < 14) continue;
+    if (/in\s+the\s+news|releases\s+and\s+statements|^20\d\d\b/i.test(title)) continue;
+    if (/\/Newsroom\/(AERA-in-the-News|News-Releases-and-Statements|News)(\/|$)/i.test(href)) continue;
+    const link = href.startsWith('http') ? href : `https://www.aera.net${href}`;
+    const id = `AERA:${href.replace(/^https?:\/\/[^/]+/, '')}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    items.push({ id, org: 'AERA', title, link, date: '', summary: '' });
+  }
+  return items;
+}
+
+const EXTRACTORS = { earli: parseEarli, ilrn: parseIlrn, aera: parseAera };
 
 // Render a JS page to HTML with Playwright (dynamic import so RSS-only use and
 // the unit tests never load the browser). Used for type:'html' sources.
-async function fetchRenderedHtml(url) {
+async function fetchRenderedHtml(url, contentSelector) {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ userAgent: UA });
     await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForTimeout(2000);
+    if (contentSelector) {
+      const scoped = await page.$eval(contentSelector, (el) => el.outerHTML).catch(() => null);
+      if (scoped) return scoped;
+    }
     return await page.content();
   } finally {
     await browser.close();
@@ -203,7 +233,7 @@ export async function fetchIntlSources({
       return { source: s, items: parseFeed(xml, s.org) };
     }
     if (s.type === 'html' && EXTRACTORS[s.extract]) {
-      const html = await fetchRenderedHtml(s.url);
+      const html = await fetchRenderedHtml(s.url, s.contentSelector);
       return { source: s, items: EXTRACTORS[s.extract](html) };
     }
     if (s.type === 'stealth' && EXTRACTORS[s.extract]) {
