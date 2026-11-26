@@ -28,7 +28,7 @@ export default {
 
     if (url.pathname === '/logs/recent' && request.method === 'GET') {
       if (!authorized(request, env)) return json({ ok: false, error: 'unauthorized' }, 401);
-      const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '25', 10) || 25, 100);
+      const limit = Math.max(1, Math.min(Number.parseInt(url.searchParams.get('limit') ?? '25', 10) || 25, 100));
       const result = await env.DB.prepare(
         'SELECT * FROM chatbot_logs ORDER BY created_at DESC LIMIT ?',
       ).bind(limit).all();
